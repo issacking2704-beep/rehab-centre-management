@@ -1,13 +1,33 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 type Patient = {
   id: string;
-  [key: string]: any;
+  name?: string;
+  patientName?: string;
+  fullName?: string;
+  age?: string | number;
+  gender?: string;
+  ipNumber?: string;
+  ipNo?: string;
+  uhid?: string;
+  uhidNo?: string;
+  admissionDate?: string;
+  dateOfAdmission?: string;
+  diagnosis?: string;
+  medicalCondition?: string;
+  address?: string;
+  permanentAddress?: string;
+  attenderName?: string;
+  guardianName?: string;
+  relationship?: string;
+  mobile?: string;
+  phone?: string;
+  emergencyContact?: string;
+  [key: string]: unknown;
 };
 
 type FormData = {
@@ -17,11 +37,11 @@ type FormData = {
   ipUhid: string;
   admissionDate: string;
   diagnosis: string;
-  address: string;
+  permanentAddress: string;
 
   attenderName: string;
   relationship: string;
-  mobile: string;
+  attenderMobile: string;
   emergencyContact: string;
 
   admissionDeposit: string;
@@ -36,20 +56,19 @@ type FormData = {
   authorisedRelationship: string;
   authorisedMobile: string;
 
-  patientSignatureName: string;
+  patientSignature: string;
   patientSignatureDate: string;
 
-  attenderSignatureName: string;
-  attenderSignatureRelationship: string;
+  attenderSignature: string;
   attenderSignatureDate: string;
 
   witnessName: string;
   witnessMobile: string;
-  witnessDate: string;
+  witnessSignatureDate: string;
 
   representativeName: string;
-  designation: string;
-  representativeDate: string;
+  representativeDesignation: string;
+  representativeSignatureDate: string;
 
   primaryContact: string;
   primaryRelationship: string;
@@ -63,8 +82,6 @@ type FormData = {
   effectiveDate: string;
 };
 
-const today = new Date().toISOString().split("T")[0];
-
 const emptyForm: FormData = {
   patientName: "",
   age: "",
@@ -72,11 +89,11 @@ const emptyForm: FormData = {
   ipUhid: "",
   admissionDate: "",
   diagnosis: "",
-  address: "",
+  permanentAddress: "",
 
   attenderName: "",
   relationship: "",
-  mobile: "",
+  attenderMobile: "",
   emergencyContact: "",
 
   admissionDeposit: "",
@@ -91,20 +108,19 @@ const emptyForm: FormData = {
   authorisedRelationship: "",
   authorisedMobile: "",
 
-  patientSignatureName: "",
+  patientSignature: "",
   patientSignatureDate: "",
 
-  attenderSignatureName: "",
-  attenderSignatureRelationship: "",
+  attenderSignature: "",
   attenderSignatureDate: "",
 
   witnessName: "",
   witnessMobile: "",
-  witnessDate: "",
+  witnessSignatureDate: "",
 
   representativeName: "",
-  designation: "",
-  representativeDate: "",
+  representativeDesignation: "",
+  representativeSignatureDate: "",
 
   primaryContact: "",
   primaryRelationship: "",
@@ -113,186 +129,104 @@ const emptyForm: FormData = {
   alternateContact: "",
   alternateMobile: "",
 
-  documentNo: `RNRC/CONSENT/${new Date().getFullYear()}/001`,
-  revisionNo: "01",
-  effectiveDate: today,
+  documentNo: "",
+  revisionNo: "1.0",
+  effectiveDate: "",
 };
 
-function firstValue(patient: Patient, keys: string[]): string {
-  for (const key of keys) {
-    const value = patient[key];
-
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      return String(value);
-    }
-  }
-
-  return "";
-}
-
-function formatDateForInput(value: any): string {
+function formatDate(value?: string | null) {
   if (!value) return "";
 
-  try {
-    if (typeof value?.toDate === "function") {
-      return value.toDate().toISOString().split("T")[0];
-    }
+  const date = new Date(value);
 
-    const date = new Date(value);
-
-    if (!Number.isNaN(date.getTime())) {
-      return date.toISOString().split("T")[0];
-    }
-  } catch {
-    return "";
+  if (Number.isNaN(date.getTime())) {
+    return value;
   }
 
-  return String(value);
+  return date.toISOString().slice(0, 10);
 }
 
-function formatDateDisplay(value: string): string {
-  if (!value) return "____ / ____ / ______";
-
-  const parts = value.split("-");
-
-  if (parts.length === 3) {
-    return `${parts[2]} / ${parts[1]} / ${parts[0]}`;
-  }
-
-  return value;
-}
-
-function patientDisplayName(patient: Patient): string {
+function getPatientName(patient: Patient) {
   return (
-    firstValue(patient, [
-      "name",
-      "patientName",
-      "fullName",
-      "patient_name",
-      "residentName",
-    ]) || `Patient ${patient.id}`
+    patient.name ||
+    patient.patientName ||
+    patient.fullName ||
+    ""
   );
 }
 
-function createFormFromPatient(patient: Patient): FormData {
-  const patientName = patientDisplayName(patient);
-
-  const admissionDate = formatDateForInput(
-    patient.admissionDate ??
-      patient.dateOfAdmission ??
-      patient.admittedOn ??
-      patient.admission_date
+function getPatientIpUhid(patient: Patient) {
+  return (
+    patient.ipNumber ||
+    patient.ipNo ||
+    patient.uhid ||
+    patient.uhidNo ||
+    ""
   );
+}
 
-  const attenderName = firstValue(patient, [
-    "attenderName",
-    "guardianName",
-    "attender",
-    "guardian",
-    "caregiverName",
-    "relativeName",
-  ]);
+function getAdmissionDate(patient: Patient) {
+  return formatDate(
+    patient.admissionDate ||
+      patient.dateOfAdmission ||
+      ""
+  );
+}
 
-  const relationship = firstValue(patient, [
-    "relationship",
-    "attenderRelationship",
-    "guardianRelationship",
-    "relation",
-  ]);
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
 
-  const mobile = firstValue(patient, [
-    "mobile",
-    "phone",
-    "contact",
-    "mobileNumber",
-    "phoneNumber",
-    "attenderMobile",
-    "guardianMobile",
-  ]);
+function displayDate(value: string) {
+  if (!value) return "________________";
 
-  return {
-    ...emptyForm,
+  const date = new Date(value);
 
-    patientName,
-    age: firstValue(patient, ["age", "patientAge"]),
-    gender: firstValue(patient, ["gender", "sex"]),
-    ipUhid: firstValue(patient, [
-      "ipNumber",
-      "ipNo",
-      "uhid",
-      "uhidNo",
-      "ipUhid",
-      "patientId",
-      "registrationNo",
-    ]),
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
-    admissionDate,
-
-    diagnosis: firstValue(patient, [
-      "diagnosis",
-      "medicalCondition",
-      "condition",
-      "diagnosisDetails",
-    ]),
-
-    address: firstValue(patient, [
-      "address",
-      "permanentAddress",
-      "fullAddress",
-      "patientAddress",
-    ]),
-
-    attenderName,
-    relationship,
-    mobile,
-
-    emergencyContact: firstValue(patient, [
-      "emergencyContact",
-      "emergencyPhone",
-      "emergencyMobile",
-      "emergencyNumber",
-    ]),
-
-    authorisedContact: attenderName,
-    authorisedRelationship: relationship,
-    authorisedMobile: mobile,
-
-    patientSignatureName: patientName,
-    patientSignatureDate: "",
-
-    attenderSignatureName: attenderName,
-    attenderSignatureRelationship: relationship,
-    attenderSignatureDate: "",
-
-    primaryContact: attenderName,
-    primaryRelationship: relationship,
-    primaryMobile: mobile,
-  };
+  return date.toLocaleDateString("en-IN");
 }
 
 export default function DocumentsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
-  const [patientSearch, setPatientSearch] = useState("");
+  const [patientError, setPatientError] = useState("");
+
   const [selectedPatientId, setSelectedPatientId] = useState("");
 
-  const [form, setForm] = useState<FormData>(emptyForm);
+  const [form, setForm] = useState<FormData>({
+    ...emptyForm,
+    effectiveDate: today(),
+    documentNo: `RNRC/CONSENT/${new Date().getFullYear()}/001`,
+  });
 
   const [showEditor, setShowEditor] = useState(true);
 
   useEffect(() => {
     async function loadPatients() {
       try {
+        setLoadingPatients(true);
+        setPatientError("");
+
         const snapshot = await getDocs(collection(db, "patients"));
 
-        const loaded: Patient[] = snapshot.docs.map((doc) => ({
+        const loadedPatients: Patient[] = snapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data(),
+          ...(doc.data() as Patient),
         }));
 
-        setPatients(loaded);
+        loadedPatients.sort((a, b) =>
+          getPatientName(a).localeCompare(getPatientName(b))
+        );
+
+        setPatients(loadedPatients);
       } catch (error) {
-        console.error("Unable to load patients:", error);
+        console.error(error);
+        setPatientError(
+          "Unable to load patients. Please check your Firebase configuration and permissions."
+        );
       } finally {
         setLoadingPatients(false);
       }
@@ -301,45 +235,12 @@ export default function DocumentsPage() {
     loadPatients();
   }, []);
 
-  const filteredPatients = useMemo(() => {
-    const query = patientSearch.trim().toLowerCase();
-
-    if (!query) return patients;
-
-    return patients.filter((patient) => {
-      const name = patientDisplayName(patient).toLowerCase();
-
-      const ip = firstValue(patient, [
-        "ipNumber",
-        "ipNo",
-        "uhid",
-        "uhidNo",
-        "patientId",
-        "registrationNo",
-      ]).toLowerCase();
-
-      const mobile = firstValue(patient, [
-        "mobile",
-        "phone",
-        "contact",
-        "mobileNumber",
-        "phoneNumber",
-      ]).toLowerCase();
-
-      return (
-        name.includes(query) ||
-        ip.includes(query) ||
-        mobile.includes(query)
-      );
-    });
-  }, [patients, patientSearch]);
-
   function updateField<K extends keyof FormData>(
     field: K,
     value: FormData[K]
   ) {
-    setForm((previous) => ({
-      ...previous,
+    setForm((current) => ({
+      ...current,
       [field]: value,
     }));
   }
@@ -349,27 +250,80 @@ export default function DocumentsPage() {
 
     const patient = patients.find((item) => item.id === id);
 
-    if (patient) {
-      setForm(createFormFromPatient(patient));
+    if (!patient) {
+      return;
     }
+
+    setForm((current) => ({
+      ...current,
+
+      patientName: getPatientName(patient),
+      age:
+        patient.age !== undefined && patient.age !== null
+          ? String(patient.age)
+          : current.age,
+
+      gender: patient.gender || current.gender,
+
+      ipUhid:
+        getPatientIpUhid(patient) || current.ipUhid,
+
+      admissionDate:
+        getAdmissionDate(patient) || current.admissionDate,
+
+      diagnosis:
+        patient.diagnosis ||
+        patient.medicalCondition ||
+        current.diagnosis,
+
+      permanentAddress:
+        patient.permanentAddress ||
+        patient.address ||
+        current.permanentAddress,
+
+      attenderName:
+        patient.attenderName ||
+        patient.guardianName ||
+        current.attenderName,
+
+      relationship:
+        patient.relationship ||
+        current.relationship,
+
+      attenderMobile:
+        patient.mobile ||
+        patient.phone ||
+        current.attenderMobile,
+
+      emergencyContact:
+        patient.emergencyContact ||
+        current.emergencyContact,
+    }));
   }
 
-  function clearPatient() {
+  function clearForm() {
     setSelectedPatientId("");
-    setForm(emptyForm);
+
+    setForm({
+      ...emptyForm,
+      effectiveDate: today(),
+      documentNo: `RNRC/CONSENT/${new Date().getFullYear()}/001`,
+    });
   }
 
-  function printDocument() {
-    setShowEditor(false);
-
-    setTimeout(() => {
-      window.print();
-
-      setTimeout(() => {
-        setShowEditor(true);
-      }, 500);
-    }, 100);
+  function handlePrint() {
+    window.print();
   }
+
+  const selectedPatient = useMemo(
+    () =>
+      patients.find(
+        (patient) => patient.id === selectedPatientId
+      ),
+    [patients, selectedPatientId]
+  );
+
+  const blank = "____________________________";
 
   return (
     <>
@@ -380,180 +334,21 @@ export default function DocumentsPage() {
 
         body {
           margin: 0;
-          background: #eef2f7;
-          color: #172033;
-          font-family:
-            Arial,
-            "Noto Sans Telugu",
-            "Noto Sans",
-            sans-serif;
-        }
-
-        .documents-shell {
-          min-height: 100vh;
-        }
-
-        .topbar {
-          position: sticky;
-          top: 0;
-          z-index: 50;
-          background: #0f172a;
-          color: white;
-          padding: 14px 22px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .topbar-title {
-          font-size: 20px;
-          font-weight: 800;
-        }
-
-        .topbar-subtitle {
-          margin-top: 3px;
-          font-size: 12px;
-          opacity: 0.75;
-        }
-
-        .topbar-actions {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        button,
-        select,
-        input,
-        textarea {
-          font: inherit;
-        }
-
-        button {
-          cursor: pointer;
-        }
-
-        .btn {
-          border: 1px solid #cbd5e1;
-          border-radius: 8px;
-          padding: 9px 14px;
-          background: white;
-          color: #172033;
-          font-weight: 700;
-        }
-
-        .btn-primary {
-          background: #2563eb;
-          border-color: #2563eb;
-          color: white;
-        }
-
-        .btn-dark {
-          background: #111827;
-          border-color: #111827;
-          color: white;
-        }
-
-        .btn-danger {
-          color: #b91c1c;
-          border-color: #fecaca;
-          background: #fff;
-        }
-
-        .workspace {
-          max-width: 1500px;
-          margin: 0 auto;
-          padding: 24px;
-        }
-
-        .control-panel {
-          background: white;
-          border: 1px solid #dbe2ea;
-          border-radius: 12px;
-          padding: 20px;
-          margin-bottom: 22px;
-          box-shadow: 0 3px 15px rgba(15, 23, 42, 0.06);
-        }
-
-        .panel-title {
-          font-size: 18px;
-          font-weight: 800;
-          margin-bottom: 16px;
-        }
-
-        .selector-grid {
-          display: grid;
-          grid-template-columns: minmax(240px, 1fr) minmax(280px, 1.5fr) auto;
-          gap: 12px;
-          align-items: end;
-        }
-
-        .field {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .field label {
-          font-size: 12px;
-          font-weight: 800;
-          color: #475569;
-        }
-
-        .field input,
-        .field select,
-        .field textarea {
-          width: 100%;
-          border: 1px solid #cbd5e1;
-          border-radius: 7px;
-          padding: 9px 10px;
-          background: white;
-          color: #111827;
-        }
-
-        .field textarea {
-          min-height: 76px;
-          resize: vertical;
-        }
-
-        .editor-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 12px;
-          margin-top: 18px;
-        }
-
-        .editor-grid .wide {
-          grid-column: span 2;
-        }
-
-        .editor-grid .full {
-          grid-column: 1 / -1;
-        }
-
-        .selected-patient {
-          margin-top: 14px;
-          padding: 11px 13px;
-          border-radius: 8px;
-          background: #eff6ff;
-          border: 1px solid #bfdbfe;
-          color: #1e40af;
-          font-size: 13px;
+          background: #eef1f5;
         }
 
         .document-page {
           width: 210mm;
           min-height: 297mm;
-          margin: 0 auto 30px;
+          margin: 18px auto;
+          padding: 15mm 14mm;
           background: white;
-          padding: 15mm 15mm 18mm;
-          box-shadow: 0 4px 30px rgba(15, 23, 42, 0.14);
           color: #111827;
+          box-shadow: 0 3px 18px rgba(0, 0, 0, 0.12);
+          font-family: Arial, "Noto Sans Telugu", sans-serif;
         }
 
-        .letterhead {
+        .document-header {
           text-align: center;
           border-bottom: 2px solid #111827;
           padding-bottom: 10px;
@@ -561,205 +356,263 @@ export default function DocumentsPage() {
         }
 
         .centre-name {
-          font-size: 20px;
-          font-weight: 900;
-          letter-spacing: 0.3px;
+          font-size: 22px;
+          font-weight: 800;
+          letter-spacing: 0.4px;
         }
 
-        .centre-motto {
-          font-size: 10px;
+        .motto {
+          margin-top: 5px;
+          font-size: 11px;
           font-weight: 700;
-          letter-spacing: 1.3px;
-          margin-top: 4px;
+          letter-spacing: 1.5px;
         }
 
         .document-title {
-          text-align: center;
-          font-size: 17px;
-          font-weight: 900;
-          margin: 16px 0 5px;
+          margin-top: 15px;
+          font-size: 18px;
+          font-weight: 800;
         }
 
         .document-title-telugu {
-          text-align: center;
+          margin-top: 6px;
+          font-size: 15px;
+          font-weight: 700;
+        }
+
+        .section {
+          margin-top: 20px;
+          break-inside: avoid;
+        }
+
+        .section-title {
           font-size: 14px;
           font-weight: 800;
-          margin-bottom: 16px;
+          border-bottom: 1px solid #9ca3af;
+          padding-bottom: 5px;
+          margin-bottom: 9px;
+          text-transform: uppercase;
         }
 
-        .patient-info {
-          border: 1px solid #334155;
-          padding: 10px;
-          margin-bottom: 16px;
+        .section-title-telugu {
+          font-size: 13px;
+          font-weight: 700;
+          margin-bottom: 10px;
         }
 
-        .patient-info-grid {
+        .paragraph {
+          font-size: 10.5px;
+          line-height: 1.65;
+          text-align: justify;
+          margin: 0 0 10px;
+        }
+
+        .field-grid {
           display: grid;
-          grid-template-columns: 2fr 0.7fr 0.9fr 1.2fr;
-          gap: 7px 12px;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 9px 15px;
         }
 
-        .info-item {
-          font-size: 9.7px;
-          line-height: 1.45;
+        .field {
+          min-width: 0;
         }
 
-        .info-label {
-          font-weight: 800;
-        }
-
-        .address-item {
+        .field.full {
           grid-column: 1 / -1;
         }
 
-        .document-section {
-          margin-top: 16px;
-          break-inside: avoid;
+        .field-label {
+          font-size: 9px;
+          font-weight: 700;
+          color: #374151;
+          margin-bottom: 3px;
         }
 
-        .section-heading {
-          font-size: 13px;
-          font-weight: 900;
-          border-bottom: 1px solid #334155;
-          padding-bottom: 4px;
-          margin-bottom: 8px;
+        .field-value {
+          min-height: 24px;
+          border-bottom: 1px solid #4b5563;
+          padding: 3px 2px;
+          font-size: 10px;
         }
 
-        .section-heading-telugu {
-          font-size: 11px;
-          font-weight: 800;
-          margin-top: -4px;
-          margin-bottom: 9px;
+        .field-box {
+          min-height: 55px;
+          border: 1px solid #6b7280;
+          padding: 7px;
+          font-size: 10px;
+          white-space: pre-wrap;
         }
 
-        .document-page p {
-          font-size: 9.4px;
-          line-height: 1.55;
-          margin: 0 0 8px;
-          text-align: justify;
-        }
-
-        .billing-grid {
+        .signatures {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          border: 1px solid #64748b;
-          margin: 10px 0;
+          gap: 25px;
+          margin-top: 14px;
         }
 
-        .billing-row {
-          min-height: 28px;
-          padding: 7px 9px;
-          border-right: 1px solid #64748b;
-          border-bottom: 1px solid #64748b;
-          font-size: 9.2px;
-        }
-
-        .billing-row:nth-child(2n) {
-          border-right: 0;
-        }
-
-        .billing-row:nth-last-child(-n + 2) {
-          border-bottom: 0;
-        }
-
-        .blank-box {
-          border: 1px solid #64748b;
-          min-height: 55px;
-          padding: 7px;
-          margin: 7px 0 12px;
-          white-space: pre-wrap;
-          font-size: 9px;
-        }
-
-        .signature-block {
-          margin-top: 18px;
+        .signature-box {
+          min-height: 125px;
+          border: 1px solid #9ca3af;
+          padding: 10px;
           break-inside: avoid;
         }
 
-        .signature-heading {
+        .signature-title {
           font-size: 11px;
-          font-weight: 900;
-          margin-bottom: 6px;
+          font-weight: 800;
+          margin-bottom: 14px;
         }
 
         .signature-line {
           border-bottom: 1px solid #111827;
-          height: 25px;
-          margin-bottom: 4px;
+          min-height: 22px;
+          margin-top: 8px;
         }
 
-        .signature-meta {
-          font-size: 8.7px;
-        }
-
-        .signatures-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 25px;
-          margin-top: 12px;
-        }
-
-        .signature-card {
-          min-height: 110px;
-          border: 1px solid #94a3b8;
-          padding: 9px;
-          break-inside: avoid;
-        }
-
-        .emergency-box {
-          border: 1.5px solid #334155;
-          padding: 10px;
-          margin-top: 18px;
-          break-inside: avoid;
-        }
-
-        .document-footer {
-          border-top: 1px solid #64748b;
-          margin-top: 18px;
-          padding-top: 8px;
+        .footer {
+          margin-top: 22px;
+          border-top: 1px solid #9ca3af;
+          padding-top: 10px;
           text-align: center;
-          font-size: 8px;
+          font-size: 9px;
           line-height: 1.5;
         }
 
-        .important-note {
-          margin-top: 10px;
-          padding: 8px;
-          border: 1px solid #64748b;
-          font-size: 8.3px;
-          line-height: 1.45;
+        .control-panel {
+          width: min(1100px, calc(100% - 30px));
+          margin: 18px auto;
+          background: white;
+          border: 1px solid #d1d5db;
+          border-radius: 12px;
+          padding: 18px;
+          box-shadow: 0 3px 15px rgba(0, 0, 0, 0.08);
+          font-family: Arial, sans-serif;
         }
 
-        .print-help {
-          max-width: 210mm;
-          margin: 0 auto 20px;
+        .control-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 15px;
+          margin-bottom: 15px;
+        }
+
+        .control-header h1 {
+          margin: 0;
+          font-size: 20px;
+        }
+
+        .control-actions {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+
+        button {
+          border: 0;
+          border-radius: 7px;
+          padding: 9px 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .primary {
+          background: #111827;
+          color: white;
+        }
+
+        .secondary {
+          background: #e5e7eb;
+          color: #111827;
+        }
+
+        .patient-selector {
+          display: grid;
+          grid-template-columns: 1fr 2fr;
+          gap: 12px;
+          margin-bottom: 18px;
+          align-items: center;
+        }
+
+        select,
+        input,
+        textarea {
+          width: 100%;
+          border: 1px solid #cbd5e1;
+          border-radius: 7px;
+          padding: 9px;
+          font: inherit;
+          background: white;
+        }
+
+        textarea {
+          min-height: 80px;
+          resize: vertical;
+        }
+
+        .editor-section {
+          border-top: 1px solid #e5e7eb;
+          padding-top: 15px;
+          margin-top: 15px;
+        }
+
+        .editor-section h2 {
+          font-size: 14px;
+          margin: 0 0 12px;
+        }
+
+        .editor-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+        }
+
+        .editor-field.full {
+          grid-column: 1 / -1;
+        }
+
+        .editor-field label {
+          display: block;
+          font-size: 11px;
+          font-weight: 700;
+          margin-bottom: 4px;
+          color: #374151;
+        }
+
+        .error {
+          background: #fee2e2;
+          color: #991b1b;
+          padding: 10px;
+          border-radius: 7px;
           font-size: 12px;
-          color: #64748b;
-          text-align: center;
+          margin-bottom: 12px;
         }
 
-        @media (max-width: 900px) {
-          .selector-grid,
-          .editor-grid {
-            grid-template-columns: 1fr;
-          }
+        .selected-patient {
+          background: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          border-radius: 7px;
+          padding: 9px 11px;
+          font-size: 12px;
+          margin-bottom: 12px;
+        }
 
-          .editor-grid .wide,
-          .editor-grid .full {
-            grid-column: auto;
-          }
-
+        @media (max-width: 800px) {
           .document-page {
             width: 100%;
             min-height: auto;
+            margin: 0;
             padding: 20px;
+            box-shadow: none;
           }
 
-          .patient-info-grid {
-            grid-template-columns: 1fr 1fr;
+          .editor-grid,
+          .field-grid,
+          .signatures {
+            grid-template-columns: 1fr;
           }
 
-          .signatures-grid {
+          .patient-selector {
             grid-template-columns: 1fr;
           }
         }
@@ -771,1280 +624,1056 @@ export default function DocumentsPage() {
           }
 
           body {
-            background: white;
+            background: white !important;
           }
 
-          .no-print,
-          .topbar,
-          .control-panel,
-          .print-help {
+          .no-print {
             display: none !important;
-          }
-
-          .workspace {
-            padding: 0;
-            margin: 0;
-            max-width: none;
           }
 
           .document-page {
             width: 210mm;
             min-height: 297mm;
             margin: 0;
-            padding: 15mm 15mm 18mm;
+            padding: 13mm 14mm;
             box-shadow: none;
           }
 
-          .document-section {
+          .section {
             break-inside: avoid;
           }
 
-          .signature-card,
-          .signature-block,
-          .emergency-box {
-            break-inside: avoid;
+          .paragraph {
+            orphans: 3;
+            widows: 3;
           }
         }
       `}</style>
 
-      <div className="documents-shell">
-        <header className="topbar no-print">
-          <div>
-            <div className="topbar-title">Documents Centre</div>
-            <div className="topbar-subtitle">
-              Patient consent, agreement and undertaking
-            </div>
-          </div>
+      <div className="control-panel no-print">
+        <div className="control-header">
+          <h1>Patient Consent Document</h1>
 
-          <div className="topbar-actions">
-            <Link href="/" className="btn">
-              ← Back to Dashboard
-            </Link>
-
+          <div className="control-actions">
             <button
-              type="button"
-              className="btn"
+              className="secondary"
               onClick={() => setShowEditor((value) => !value)}
             >
               {showEditor ? "Hide Editor" : "Show Editor"}
             </button>
 
             <button
-              type="button"
-              className="btn btn-primary"
-              onClick={printDocument}
+              className="secondary"
+              onClick={clearForm}
             >
-              🖨 Print / Save PDF
+              Clear
             </button>
+
+            <button
+              className="primary"
+              onClick={handlePrint}
+            >
+              Print / Save PDF
+            </button>
+          </div>
+        </div>
+
+        {patientError && (
+          <div className="error">
+            {patientError}
+          </div>
+        )}
+
+        <div className="patient-selector">
+          <strong>Select Existing Patient</strong>
+
+          <select
+            value={selectedPatientId}
+            onChange={(event) =>
+              selectPatient(event.target.value)
+            }
+            disabled={loadingPatients}
+          >
+            <option value="">
+              {loadingPatients
+                ? "Loading patients..."
+                : "— Select a patient —"}
+            </option>
+
+            {patients.map((patient) => (
+              <option
+                key={patient.id}
+                value={patient.id}
+              >
+                {getPatientName(patient) || "Unnamed Patient"}
+                {getPatientIpUhid(patient)
+                  ? ` — ${getPatientIpUhid(patient)}`
+                  : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedPatient && (
+          <div className="selected-patient">
+            Selected:{" "}
+            <strong>
+              {getPatientName(selectedPatient)}
+            </strong>
+            {getPatientIpUhid(selectedPatient)
+              ? ` • ${getPatientIpUhid(selectedPatient)}`
+              : ""}
+          </div>
+        )}
+
+        {showEditor && (
+          <>
+            <div className="editor-section">
+              <h2>Patient Information</h2>
+
+              <div className="editor-grid">
+                <EditorInput
+                  label="Patient / Resident Name"
+                  value={form.patientName}
+                  onChange={(value) =>
+                    updateField("patientName", value)
+                  }
+                />
+
+                <EditorInput
+                  label="Age"
+                  value={form.age}
+                  onChange={(value) =>
+                    updateField("age", value)
+                  }
+                />
+
+                <EditorInput
+                  label="Gender"
+                  value={form.gender}
+                  onChange={(value) =>
+                    updateField("gender", value)
+                  }
+                />
+
+                <EditorInput
+                  label="IP / UHID No."
+                  value={form.ipUhid}
+                  onChange={(value) =>
+                    updateField("ipUhid", value)
+                  }
+                />
+
+                <EditorInput
+                  label="Date of Admission"
+                  type="date"
+                  value={form.admissionDate}
+                  onChange={(value) =>
+                    updateField("admissionDate", value)
+                  }
+                />
+
+                <EditorInput
+                  label="Diagnosis / Medical Condition"
+                  value={form.diagnosis}
+                  onChange={(value) =>
+                    updateField("diagnosis", value)
+                  }
+                />
+
+                <EditorTextarea
+                  label="Permanent Address"
+                  value={form.permanentAddress}
+                  onChange={(value) =>
+                    updateField(
+                      "permanentAddress",
+                      value
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="editor-section">
+              <h2>Attender / Guardian</h2>
+
+              <div className="editor-grid">
+                <EditorInput
+                  label="Attender / Guardian Name"
+                  value={form.attenderName}
+                  onChange={(value) =>
+                    updateField(
+                      "attenderName",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Relationship"
+                  value={form.relationship}
+                  onChange={(value) =>
+                    updateField(
+                      "relationship",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Mobile"
+                  value={form.attenderMobile}
+                  onChange={(value) =>
+                    updateField(
+                      "attenderMobile",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Emergency Contact"
+                  value={form.emergencyContact}
+                  onChange={(value) =>
+                    updateField(
+                      "emergencyContact",
+                      value
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="editor-section">
+              <h2>Financial Terms</h2>
+
+              <div className="editor-grid">
+                <EditorInput
+                  label="Admission / Deposit"
+                  value={form.admissionDeposit}
+                  onChange={(value) =>
+                    updateField(
+                      "admissionDeposit",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Room / Bed Charges"
+                  value={form.roomBedCharges}
+                  onChange={(value) =>
+                    updateField(
+                      "roomBedCharges",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Daily / Monthly Package"
+                  value={form.packageCharges}
+                  onChange={(value) =>
+                    updateField(
+                      "packageCharges",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Other Charges"
+                  value={form.otherCharges}
+                  onChange={(value) =>
+                    updateField(
+                      "otherCharges",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Payment Mode"
+                  value={form.paymentMode}
+                  onChange={(value) =>
+                    updateField(
+                      "paymentMode",
+                      value
+                    )
+                  }
+              </div>
+            </div>
+
+            <div className="editor-section">
+              <h2>Other Details</h2>
+
+              <div className="editor-grid">
+                <EditorTextarea
+                  label="Items Deposited With Centre"
+                  value={form.depositedItems}
+                  onChange={(value) =>
+                    updateField(
+                      "depositedItems",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Authorised Contact Person"
+                  value={form.authorisedContact}
+                  onChange={(value) =>
+                    updateField(
+                      "authorisedContact",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Authorised Relationship"
+                  value={form.authorisedRelationship}
+                  onChange={(value) =>
+                    updateField(
+                      "authorisedRelationship",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Authorised Mobile"
+                  value={form.authorisedMobile}
+                  onChange={(value) =>
+                    updateField(
+                      "authorisedMobile",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Primary Emergency Contact"
+                  value={form.primaryContact}
+                  onChange={(value) =>
+                    updateField(
+                      "primaryContact",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Primary Relationship"
+                  value={form.primaryRelationship}
+                  onChange={(value) =>
+                    updateField(
+                      "primaryRelationship",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Primary Mobile"
+                  value={form.primaryMobile}
+                  onChange={(value) =>
+                    updateField(
+                      "primaryMobile",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Alternate Contact"
+                  value={form.alternateContact}
+                  onChange={(value) =>
+                    updateField(
+                      "alternateContact",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Alternate Mobile"
+                  value={form.alternateMobile}
+                  onChange={(value) =>
+                    updateField(
+                      "alternateMobile",
+                      value
+                    )
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="editor-section">
+              <h2>Document Control</h2>
+
+              <div className="editor-grid">
+                <EditorInput
+                  label="Document No."
+                  value={form.documentNo}
+                  onChange={(value) =>
+                    updateField(
+                      "documentNo",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Revision No."
+                  value={form.revisionNo}
+                  onChange={(value) =>
+                    updateField(
+                      "revisionNo",
+                      value
+                    )
+                  }
+                />
+
+                <EditorInput
+                  label="Effective Date"
+                  type="date"
+                  value={form.effectiveDate}
+                  onChange={(value) =>
+                    updateField(
+                      "effectiveDate",
+                      value
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <main className="document-page">
+        <header className="document-header">
+          <div className="centre-name">
+            ROSES NEURO REHABILITATION CENTRE
+          </div>
+
+          <div className="motto">
+            SERVICE • HOPE • HUMANITY • REVIVAL • EDUCATION
+          </div>
+
+          <div className="document-title">
+            PATIENT & ATTENDER CONSENT, AGREEMENT AND UNDERTAKING
+          </div>
+
+          <div className="document-title-telugu">
+            పేషెంట్ మరియు అటెండర్ అంగీకార పత్రం, ఒప్పందం మరియు బాధ్యత ప్రకటన
           </div>
         </header>
 
-        <main className="workspace">
-          {showEditor && (
-            <section className="control-panel no-print">
-              <div className="panel-title">
-                Patient Selection & Document Editor
+        <section className="section">
+          <div className="field-grid">
+            <PrintField
+              label="Patient / Resident Name / పేషెంట్ పేరు"
+              value={form.patientName}
+            />
+
+            <PrintField
+              label="Age / వయస్సు"
+              value={form.age}
+            />
+
+            <PrintField
+              label="Gender / లింగం"
+              value={form.gender}
+            />
+
+            <PrintField
+              label="IP / UHID No."
+              value={form.ipUhid}
+            />
+
+            <PrintField
+              label="Date of Admission / చేరిన తేదీ"
+              value={displayDate(form.admissionDate)}
+            />
+
+            <PrintField
+              label="Diagnosis / Medical Condition / వైద్య నిర్ధారణ / ఆరోగ్య పరిస్థితి"
+              value={form.diagnosis}
+            />
+
+            <div className="field full">
+              <div className="field-label">
+                Permanent Address / శాశ్వత చిరునామా
               </div>
-
-              <div className="selector-grid">
-                <div className="field">
-                  <label>Search Patient</label>
-                  <input
-                    value={patientSearch}
-                    onChange={(event) =>
-                      setPatientSearch(event.target.value)
-                    }
-                    placeholder="Search name, IP/UHID or mobile..."
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Select Patient</label>
-
-                  <select
-                    value={selectedPatientId}
-                    onChange={(event) => selectPatient(event.target.value)}
-                  >
-                    <option value="">
-                      {loadingPatients
-                        ? "Loading patients..."
-                        : "Select a patient"}
-                    </option>
-
-                    {filteredPatients.map((patient) => (
-                      <option key={patient.id} value={patient.id}>
-                        {patientDisplayName(patient)}
-                        {firstValue(patient, [
-                          "ipNumber",
-                          "ipNo",
-                          "uhid",
-                          "uhidNo",
-                          "registrationNo",
-                        ])
-                          ? ` — ${firstValue(patient, [
-                              "ipNumber",
-                              "ipNo",
-                              "uhid",
-                              "uhidNo",
-                              "registrationNo",
-                            ])}`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  onClick={clearPatient}
-                >
-                  Clear
-                </button>
+              <div className="field-box">
+                {form.permanentAddress || blank}
               </div>
-
-              {selectedPatientId && (
-                <div className="selected-patient">
-                  <strong>Selected patient:</strong>{" "}
-                  {form.patientName || "Unnamed patient"}{" "}
-                  {form.ipUhid ? `• ${form.ipUhid}` : ""}
-                </div>
-              )}
-
-              <div className="editor-grid">
-                <div className="field">
-                  <label>Patient / Resident Name</label>
-                  <input
-                    value={form.patientName}
-                    onChange={(e) =>
-                      updateField("patientName", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Age</label>
-                  <input
-                    value={form.age}
-                    onChange={(e) => updateField("age", e.target.value)}
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Gender</label>
-                  <input
-                    value={form.gender}
-                    onChange={(e) => updateField("gender", e.target.value)}
-                  />
-                </div>
-
-                <div className="field">
-                  <label>IP / UHID No.</label>
-                  <input
-                    value={form.ipUhid}
-                    onChange={(e) => updateField("ipUhid", e.target.value)}
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Date of Admission</label>
-                  <input
-                    type="date"
-                    value={form.admissionDate}
-                    onChange={(e) =>
-                      updateField("admissionDate", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Diagnosis / Medical Condition</label>
-                  <input
-                    value={form.diagnosis}
-                    onChange={(e) =>
-                      updateField("diagnosis", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field full">
-                  <label>Permanent Address</label>
-                  <textarea
-                    value={form.address}
-                    onChange={(e) => updateField("address", e.target.value)}
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Attender / Guardian Name</label>
-                  <input
-                    value={form.attenderName}
-                    onChange={(e) =>
-                      updateField("attenderName", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Relationship</label>
-                  <input
-                    value={form.relationship}
-                    onChange={(e) =>
-                      updateField("relationship", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Mobile</label>
-                  <input
-                    value={form.mobile}
-                    onChange={(e) => updateField("mobile", e.target.value)}
-                  />
-                </div>
-
-                <div className="field full">
-                  <label>Emergency Contact</label>
-                  <input
-                    value={form.emergencyContact}
-                    onChange={(e) =>
-                      updateField("emergencyContact", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Admission / Deposit ₹</label>
-                  <input
-                    value={form.admissionDeposit}
-                    onChange={(e) =>
-                      updateField("admissionDeposit", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Room / Bed Charges ₹</label>
-                  <input
-                    value={form.roomBedCharges}
-                    onChange={(e) =>
-                      updateField("roomBedCharges", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Daily / Monthly Package ₹</label>
-                  <input
-                    value={form.packageCharges}
-                    onChange={(e) =>
-                      updateField("packageCharges", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Other Charges ₹</label>
-                  <input
-                    value={form.otherCharges}
-                    onChange={(e) =>
-                      updateField("otherCharges", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Payment Mode</label>
-                  <input
-                    value={form.paymentMode}
-                    onChange={(e) =>
-                      updateField("paymentMode", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field full">
-                  <label>Items Deposited With Centre</label>
-                  <textarea
-                    value={form.depositedItems}
-                    onChange={(e) =>
-                      updateField("depositedItems", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Authorised Contact Person</label>
-                  <input
-                    value={form.authorisedContact}
-                    onChange={(e) =>
-                      updateField("authorisedContact", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Authorised Relationship</label>
-                  <input
-                    value={form.authorisedRelationship}
-                    onChange={(e) =>
-                      updateField(
-                        "authorisedRelationship",
-                        e.target.value
-                      )
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Authorised Mobile</label>
-                  <input
-                    value={form.authorisedMobile}
-                    onChange={(e) =>
-                      updateField("authorisedMobile", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Witness Name</label>
-                  <input
-                    value={form.witnessName}
-                    onChange={(e) =>
-                      updateField("witnessName", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Witness Mobile</label>
-                  <input
-                    value={form.witnessMobile}
-                    onChange={(e) =>
-                      updateField("witnessMobile", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Witness Date</label>
-                  <input
-                    type="date"
-                    value={form.witnessDate}
-                    onChange={(e) =>
-                      updateField("witnessDate", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Centre Representative Name</label>
-                  <input
-                    value={form.representativeName}
-                    onChange={(e) =>
-                      updateField("representativeName", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Designation</label>
-                  <input
-                    value={form.designation}
-                    onChange={(e) =>
-                      updateField("designation", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Representative Date</label>
-                  <input
-                    type="date"
-                    value={form.representativeDate}
-                    onChange={(e) =>
-                      updateField("representativeDate", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Primary Contact</label>
-                  <input
-                    value={form.primaryContact}
-                    onChange={(e) =>
-                      updateField("primaryContact", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Primary Relationship</label>
-                  <input
-                    value={form.primaryRelationship}
-                    onChange={(e) =>
-                      updateField("primaryRelationship", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Primary Mobile</label>
-                  <input
-                    value={form.primaryMobile}
-                    onChange={(e) =>
-                      updateField("primaryMobile", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Alternate Contact</label>
-                  <input
-                    value={form.alternateContact}
-                    onChange={(e) =>
-                      updateField("alternateContact", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Alternate Mobile</label>
-                  <input
-                    value={form.alternateMobile}
-                    onChange={(e) =>
-                      updateField("alternateMobile", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Document No.</label>
-                  <input
-                    value={form.documentNo}
-                    onChange={(e) =>
-                      updateField("documentNo", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Revision No.</label>
-                  <input
-                    value={form.revisionNo}
-                    onChange={(e) =>
-                      updateField("revisionNo", e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="field">
-                  <label>Effective Date</label>
-                  <input
-                    type="date"
-                    value={form.effectiveDate}
-                    onChange={(e) =>
-                      updateField("effectiveDate", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-            </section>
-          )}
-
-          <div className="print-help no-print">
-            Review the information above, then click{" "}
-            <strong>Print / Save PDF</strong>. In the browser print dialog,
-            choose <strong>Save as PDF</strong> and paper size{" "}
-            <strong>A4</strong>.
-          </div>
-
-          <article className="document-page">
-            <header className="letterhead">
-              <div className="centre-name">
-                ROSES NEURO REHABILITATION CENTRE
-              </div>
-
-              <div className="centre-motto">
-                SERVICE • HOPE • HUMANITY • REVIVAL • EDUCATION
-              </div>
-            </header>
-
-            <h1 className="document-title">
-              PATIENT & ATTENDER CONSENT, AGREEMENT AND UNDERTAKING
-            </h1>
-
-            <div className="document-title-telugu">
-              పేషెంట్ మరియు అటెండర్ అంగీకార పత్రం, ఒప్పందం మరియు బాధ్యత ప్రకటన
             </div>
 
-            <section className="patient-info">
-              <div className="patient-info-grid">
-                <div className="info-item">
-                  <span className="info-label">
-                    Patient / Resident Name / పేషెంట్ పేరు:
-                  </span>{" "}
-                  {form.patientName || "____________________________"}
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">Age / వయస్సు:</span>{" "}
-                  {form.age || "________"}
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">Gender / లింగం:</span>{" "}
-                  {form.gender || "________"}
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">IP / UHID No.:</span>{" "}
-                  {form.ipUhid || "____________"}
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">
-                    Date of Admission / చేరిన తేదీ:
-                  </span>{" "}
-                  {formatDateDisplay(form.admissionDate)}
-                </div>
-
-                <div className="info-item address-item">
-                  <span className="info-label">
-                    Diagnosis / Medical Condition / వైద్య నిర్ధారణ / ఆరోగ్య
-                    పరిస్థితి:
-                  </span>{" "}
-                  {form.diagnosis || "________________________________"}
-                </div>
-
-                <div className="info-item address-item">
-                  <span className="info-label">
-                    Permanent Address / శాశ్వత చిరునామా:
-                  </span>
-                  <br />
-                  {form.address || "____________________________________________________________"}
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">
-                    Attender / Guardian Name / అటెండర్ / సంరక్షకుని పేరు:
-                  </span>{" "}
-                  {form.attenderName || "____________________________"}
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">
-                    Relationship / సంబంధం:
-                  </span>{" "}
-                  {form.relationship || "________"}
-                </div>
-
-                <div className="info-item">
-                  <span className="info-label">
-                    Mobile / మొబైల్:
-                  </span>{" "}
-                  {form.mobile || "____________"}
-                </div>
-
-                <div className="info-item address-item">
-                  <span className="info-label">
-                    Emergency Contact / అత్యవసర సంప్రదింపు:
-                  </span>{" "}
-                  {form.emergencyContact || "____________________________"}
-                </div>
-              </div>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                CONSENT, AGREEMENT AND UNDERTAKING
-              </div>
-
-              <div className="section-heading-telugu">
-                అంగీకారం, ఒప్పందం మరియు బాధ్యత ప్రకటన
-              </div>
-
-              <p>
-                I, the undersigned patient / parent / guardian / authorised
-                attendant, hereby voluntarily agree to admit and/or continue
-                the above-mentioned patient at <strong>ROSES Neuro Rehabilitation Centre</strong>{" "}
-                for appropriate rehabilitation, nursing care, physiotherapy,
-                occupational and supportive rehabilitation services, medical
-                supervision and other services considered necessary according
-                to the patient's condition and the professional advice of the
-                treating medical team.
-              </p>
-
-              <p>
-                నేను క్రింద సంతకం చేసిన పేషెంట్ / తల్లిదండ్రి / సంరక్షకుడు /
-                అధీకృత అటెండర్‌గా, పై పేర్కొన్న పేషెంట్‌ను వారి ఆరోగ్య
-                పరిస్థితికి అనుగుణంగా మరియు చికిత్స అందించే వైద్య బృందం /
-                సంబంధిత నిపుణుల సూచనల మేరకు{" "}
-                <strong>ROSES Neuro Rehabilitation Centre</strong>లో తగిన
-                రిహాబిలిటేషన్, నర్సింగ్ కేర్, ఫిజియోథెరపీ, ఆక్యుపేషనల్ మరియు
-                ఇతర సహాయక పునరావాస సేవలు, వైద్య పర్యవేక్షణ మరియు అవసరమైన
-                ఇతర సేవల కోసం చేర్పించడానికి / కొనసాగించడానికి నా
-                స్వచ్ఛంద అంగీకారాన్ని తెలియజేస్తున్నాను.
-              </p>
-
-              <p>
-                I confirm that the patient's relevant medical history,
-                previous treatment details, current medicines, known
-                allergies, previous operations, significant medical
-                conditions and other information known to me have been
-                disclosed to the centre to the best of my knowledge. I
-                understand that incomplete or incorrect information may affect
-                the assessment and care of the patient.
-              </p>
-
-              <p>
-                పేషెంట్‌కు సంబంధించిన వైద్య చరిత్ర, గత చికిత్స వివరాలు,
-                ప్రస్తుతం ఉపయోగిస్తున్న మందులు, తెలిసిన అలర్జీలు, గత
-                శస్త్రచికిత్సలు, ముఖ్యమైన ఆరోగ్య సమస్యలు మరియు నాకు తెలిసిన
-                ఇతర సంబంధిత సమాచారాన్ని నా పరిజ్ఞానం మేరకు సెంటర్‌కు
-                అందించినట్లు నేను ధృవీకరిస్తున్నాను. అసంపూర్ణమైన లేదా తప్పు
-                సమాచారం పేషెంట్ పరిశీలన మరియు సంరక్షణపై ప్రభావం చూపవచ్చని
-                నేను అర్థం చేసుకున్నాను.
-              </p>
-
-              <p>
-                I understand that neuro-rehabilitation is generally a gradual
-                and ongoing process. The duration of rehabilitation and the
-                level of improvement may differ from one patient to another
-                and may depend on the patient's diagnosis, severity of
-                illness, physical and cognitive condition, participation,
-                cooperation, response to therapy and other medical or personal
-                factors. No specific outcome or recovery time is guaranteed
-                unless expressly stated in writing by the treating
-                professional.
-              </p>
-
-              <p>
-                న్యూరో రిహాబిలిటేషన్ సాధారణంగా క్రమంగా మరియు నిరంతరం
-                కొనసాగాల్సిన ప్రక్రియ అని నేను అర్థం చేసుకున్నాను.
-                రిహాబిలిటేషన్ వ్యవధి మరియు పేషెంట్‌లో కనిపించే మెరుగుదల
-                ప్రతి వ్యక్తిలో భిన్నంగా ఉండవచ్చు. పేషెంట్‌కు ఉన్న వైద్య
-                నిర్ధారణ, సమస్య తీవ్రత, శారీరక మరియు మానసిక స్థితి, చికిత్సలో
-                పాల్గొనడం, సహకారం, థెరపీకి స్పందన మరియు ఇతర వైద్య / వ్యక్తిగత
-                అంశాలపై ఫలితాలు ఆధారపడి ఉండవచ్చు. చికిత్స అందించే నిపుణుడు
-                ప్రత్యేకంగా లిఖితపూర్వకంగా హామీ ఇచ్చిన సందర్భం తప్ప,
-                నిర్దిష్ట రికవరీ సమయం లేదా ఫలితానికి హామీ ఉండదని నేను
-                అర్థం చేసుకున్నాను.
-              </p>
-
-              <p>
-                I agree that the patient will participate in the
-                rehabilitation programme as reasonably possible and will
-                follow the instructions provided by the doctors,
-                physiotherapists, nurses, therapists and other authorised
-                staff. I understand that regular participation, appropriate
-                rest, nutrition, medication compliance and cooperation may be
-                important for rehabilitation.
-              </p>
-
-              <p>
-                పేషెంట్ సాధ్యమైనంతవరకు రిహాబిలిటేషన్ కార్యక్రమంలో పాల్గొని,
-                వైద్యులు, ఫిజియోథెరపిస్టులు, నర్సులు, థెరపిస్టులు మరియు ఇతర
-                అధీకృత సిబ్బంది ఇచ్చే సూచనలను పాటించడానికి నేను అంగీకరిస్తున్నాను.
-                క్రమమైన థెరపీ, తగిన విశ్రాంతి, పోషకాహారం, మందులను సూచించిన
-                విధంగా తీసుకోవడం మరియు సహకారం రిహాబిలిటేషన్‌లో ముఖ్యమైన
-                పాత్ర పోషించవచ్చని నేను అర్థం చేసుకున్నాను.
-              </p>
-
-              <p>
-                The centre may provide nursing and daily-care assistance
-                according to the patient's assessed needs. Such assistance
-                may include medication administration as prescribed,
-                monitoring of vital signs when required, assistance with
-                feeding, personal hygiene, positioning, mobility, transfer to
-                a wheelchair, basic activities of daily living and other
-                supportive care within the scope of services available at the
-                centre.
-              </p>
-
-              <p>
-                పేషెంట్ అవసరాలను బట్టి సెంటర్ నర్సింగ్ మరియు రోజువారీ సంరక్షణలో
-                సహాయం అందించవచ్చు. ఇందులో వైద్యుల సూచనల ప్రకారం మందులు
-                అందించడం, అవసరమైనప్పుడు వైటల్ సైన్స్ పరిశీలించడం, ఫీడింగ్‌లో
-                సహాయం, వ్యక్తిగత పరిశుభ్రత, పొజిషన్ మార్చడం, కదలికలో సహాయం,
-                వీల్‌చైర్‌కు మార్చడంలో సహాయం, రోజువారీ ప్రాథమిక పనుల్లో సహాయం
-                మరియు సెంటర్ పరిధిలో అందుబాటులో ఉన్న ఇతర సహాయక సేవలు ఉండవచ్చు.
-              </p>
-
-              <p>
-                I understand that physiotherapy, occupational therapy, speech
-                and swallowing rehabilitation, cognitive rehabilitation or
-                other specialised rehabilitation services may be recommended
-                depending on the patient's condition and availability. The
-                rehabilitation programme may be modified, increased, reduced,
-                paused or discontinued based on clinical assessment and
-                professional advice.
-              </p>
-
-              <p>
-                పేషెంట్ పరిస్థితిని బట్టి ఫిజియోథెరపీ, ఆక్యుపేషనల్ థెరపీ,
-                స్పీచ్ మరియు స్వాలోయింగ్ రిహాబిలిటేషన్, కాగ్నిటివ్
-                రిహాబిలిటేషన్ లేదా ఇతర ప్రత్యేక పునరావాస సేవలు సూచించబడవచ్చు.
-                వైద్య / క్లినికల్ పరిశీలన మరియు నిపుణుల సూచనల ఆధారంగా
-                రిహాబిలిటేషన్ కార్యక్రమాన్ని మార్చడం, పెంచడం, తగ్గించడం,
-                తాత్కాలికంగా నిలిపివేయడం లేదా ముగించడం జరగవచ్చని నేను
-                అర్థం చేసుకున్నాను.
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                MEDICATION, FEEDING AND MEDICAL INFORMATION
-              </div>
-
-              <div className="section-heading-telugu">
-                మందులు, ఫీడింగ్ మరియు వైద్య సమాచారం
-              </div>
-
-              <p>
-                All medicines shall be administered or supervised according to
-                the prescription and instructions of the treating medical
-                professional. The patient / attendant shall not independently
-                alter, stop, add or substitute medicines without informing the
-                treating team. Any outside prescription, medicine or treatment
-                brought by the family should be disclosed to the centre.
-              </p>
-
-              <p>
-                మందులు చికిత్స అందించే వైద్య నిపుణుల ప్రిస్క్రిప్షన్ మరియు
-                సూచనల ప్రకారం మాత్రమే ఇవ్వబడతాయి / పర్యవేక్షించబడతాయి. వైద్య
-                బృందానికి సమాచారం ఇవ్వకుండా పేషెంట్ / అటెండర్ స్వయంగా
-                మందులను మార్చడం, నిలిపివేయడం, కొత్త మందులు కలపడం లేదా
-                ప్రత్యామ్నాయ మందులు ఇవ్వకూడదు. కుటుంబ సభ్యులు బయట నుండి
-                తీసుకువచ్చే ఏదైనా మందు లేదా చికిత్స గురించి సెంటర్‌కు
-                సమాచారం ఇవ్వాలి.
-              </p>
-
-              <p>
-                Where feeding assistance is required, feeding shall be carried
-                out according to the patient's assessed needs and the advice
-                of the treating team. The attendant must inform the centre
-                about swallowing difficulties, choking episodes, dietary
-                restrictions, allergies or any previous feeding-related
-                problem.
-              </p>
-
-              <p>
-                ఫీడింగ్‌లో సహాయం అవసరమైనప్పుడు, పేషెంట్ అవసరాలు మరియు చికిత్సా
-                బృందం సూచనల ప్రకారం ఫీడింగ్ నిర్వహించబడుతుంది. మింగడంలో
-                ఇబ్బంది, ఆహారం తీసుకునేటప్పుడు సమస్యలు, ఆహార పరిమితులు,
-                అలర్జీలు లేదా గతంలో ఫీడింగ్‌కు సంబంధించిన సమస్యలు ఉంటే
-                అటెండర్ సెంటర్‌కు తెలియజేయాలి.
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                EMERGENCY AND TRANSFER
-              </div>
-
-              <div className="section-heading-telugu">
-                అత్యవసర పరిస్థితులు మరియు ఆసుపత్రికి తరలింపు
-              </div>
-
-              <p>
-                I understand that rehabilitation centres may encounter
-                situations in which a patient's medical condition changes
-                unexpectedly or requires medical investigation, emergency
-                treatment or hospital-level care. In such circumstances, the
-                centre may advise or arrange, as appropriate, transfer or
-                referral to a hospital / emergency medical facility. The
-                emergency contact person will be informed as soon as
-                reasonably possible.
-              </p>
-
-              <p>
-                రిహాబిలిటేషన్ సెంటర్‌లో ఉన్న సమయంలో పేషెంట్ ఆరోగ్య పరిస్థితి
-                అనుకోకుండా మారవచ్చని లేదా వైద్య పరీక్షలు, అత్యవసర చికిత్స లేదా
-                ఆసుపత్రి స్థాయి వైద్య సంరక్షణ అవసరం కావచ్చని నేను
-                అర్థం చేసుకున్నాను. అలాంటి పరిస్థితుల్లో అవసరాన్ని బట్టి
-                ఆసుపత్రి / అత్యవసర వైద్య కేంద్రానికి తరలించాలని సెంటర్
-                సూచించవచ్చు లేదా రిఫర్ చేయవచ్చు. సాధ్యమైనంత త్వరగా
-                అత్యవసర సంప్రదింపు వ్యక్తికి సమాచారం అందించబడుతుంది.
-              </p>
-
-              <p>
-                The patient / attendant agrees to cooperate with reasonable
-                emergency instructions and provide the necessary emergency
-                contact and medical information without delay.
-              </p>
-
-              <p>
-                పేషెంట్ / అటెండర్ అత్యవసర పరిస్థితుల్లో సిబ్బంది ఇచ్చే తగిన
-                సూచనలకు సహకరించి, అవసరమైన అత్యవసర సంప్రదింపు మరియు వైద్య
-                సమాచారాన్ని ఆలస్యం లేకుండా అందించడానికి అంగీకరిస్తున్నారు.
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                FINANCIAL TERMS AND PAYMENT RESPONSIBILITY
-              </div>
-
-              <div className="section-heading-telugu">
-                ఆర్థిక నిబంధనలు మరియు చెల్లింపు బాధ్యత
-              </div>
-
-              <p>
-                I agree to pay all applicable charges for accommodation,
-                nursing care, rehabilitation, physiotherapy, medicines,
-                consumables, investigations, procedures, special services and
-                other services provided to the patient, according to the
-                applicable tariff, package or written quotation communicated
-                by the centre.
-              </p>
-
-              <p>
-                పేషెంట్‌కు అందించే వసతి, నర్సింగ్ కేర్, రిహాబిలిటేషన్,
-                ఫిజియోథెరపీ, మందులు, కన్స్యూమబుల్స్, పరీక్షలు, విధానాలు,
-                ప్రత్యేక సేవలు మరియు ఇతర సేవలకు వర్తించే చార్జీలను సెంటర్
-                తెలియజేసిన టారిఫ్ / ప్యాకేజీ / లిఖితపూర్వక అంచనా ప్రకారం
-                చెల్లించడానికి నేను అంగీకరిస్తున్నాను.
-              </p>
-
-              <div className="billing-grid">
-                <div className="billing-row">
-                  <strong>Admission / Deposit / అడ్మిషన్ / డిపాజిట్:</strong>{" "}
-                  ₹ {form.admissionDeposit || "________________"}
-                </div>
-
-                <div className="billing-row">
-                  <strong>Room / Bed Charges / గది / బెడ్ చార్జీలు:</strong>{" "}
-                  ₹ {form.roomBedCharges || "________________"}
-                </div>
-
-                <div className="billing-row">
-                  <strong>
-                    Daily / Monthly Package / రోజువారీ / నెలవారీ ప్యాకేజీ:
-                  </strong>{" "}
-                  ₹ {form.packageCharges || "________________"}
-                </div>
-
-                <div className="billing-row">
-                  <strong>Other Charges / ఇతర చార్జీలు:</strong>{" "}
-                  ₹ {form.otherCharges || "________________"}
-                </div>
-
-                <div className="billing-row">
-                  <strong>Payment Mode / చెల్లింపు విధానం:</strong>{" "}
-                  {form.paymentMode || "________________"}
-                </div>
-
-                <div className="billing-row">
-                  <strong>Patient:</strong>{" "}
-                  {form.patientName || "________________"}
-                </div>
-              </div>
-
-              <p>
-                Additional investigations, medicines, procedures, consumables,
-                emergency services or outside hospital services, where
-                applicable, may involve additional charges. I agree to settle
-                such applicable charges as per the centre's billing terms.
-              </p>
-
-              <p>
-                అవసరమైన అదనపు పరీక్షలు, మందులు, విధానాలు, కన్స్యూమబుల్స్,
-                అత్యవసర సేవలు లేదా బయట ఆసుపత్రి సేవలకు వర్తించే అదనపు
-                చార్జీలు ఉండవచ్చు. అలాంటి వర్తించే మొత్తాలను సెంటర్ బిల్లింగ్
-                నిబంధనల ప్రకారం చెల్లించడానికి నేను అంగీకరిస్తున్నాను.
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                PATIENT BELONGINGS AND PERSONAL PROPERTY
-              </div>
-
-              <div className="section-heading-telugu">
-                పేషెంట్ వ్యక్తిగత వస్తువులు
-              </div>
-
-              <p>
-                The patient / attendant is advised not to keep large amounts
-                of cash, jewellery or other valuable personal belongings at
-                the centre. Valuable items should preferably remain with the
-                family / attendant. Any item specifically deposited with the
-                centre should be recorded separately.
-              </p>
-
-              <p>
-                పేషెంట్ / అటెండర్ పెద్ద మొత్తంలో నగదు, నగలు లేదా ఇతర విలువైన
-                వస్తువులను సెంటర్‌లో ఉంచకుండా కుటుంబ సభ్యుల వద్ద భద్రంగా
-                ఉంచుకోవాలని సూచించబడింది. సెంటర్ వద్ద ప్రత్యేకంగా అప్పగించిన
-                విలువైన వస్తువులు ఉంటే వాటిని విడిగా నమోదు చేయాలి.
-              </p>
-
-              <strong style={{ fontSize: "9px" }}>
-                Items deposited with centre, if any / సెంటర్ వద్ద అప్పగించిన
-                వస్తువులు:
-              </strong>
-
-              <div className="blank-box">
-                {form.depositedItems || ""}
-              </div>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                ATTENDER RESPONSIBILITIES
-              </div>
-
-              <div className="section-heading-telugu">
-                అటెండర్ బాధ్యతలు
-              </div>
-
-              <p>
-                The patient / attendant agrees to provide complete cooperation
-                to the rehabilitation team, follow reasonable centre rules,
-                maintain respectful behaviour towards staff and other
-                patients, provide correct medical information, inform the
-                staff promptly about any change in the patient's condition and
-                comply with safety instructions. The attendant shall not
-                interfere with professional treatment decisions or
-                independently instruct staff to change prescribed treatment.
-              </p>
-
-              <p>
-                పేషెంట్ / అటెండర్ రిహాబిలిటేషన్ బృందంతో పూర్తి సహకారం
-                అందించాలి, సెంటర్‌లోని తగిన నియమాలను పాటించాలి, సిబ్బంది మరియు
-                ఇతర పేషెంట్ల పట్ల గౌరవప్రదంగా ప్రవర్తించాలి, సరైన వైద్య
-                సమాచారాన్ని అందించాలి, పేషెంట్ ఆరోగ్య పరిస్థితిలో ఏదైనా మార్పు
-                ఉంటే వెంటనే సిబ్బందికి తెలియజేయాలి మరియు భద్రతా సూచనలను
-                పాటించాలి. వైద్య నిపుణుల చికిత్సా నిర్ణయాల్లో అనవసరంగా
-                జోక్యం చేసుకోకూడదు మరియు సూచించిన చికిత్సను మార్చమని
-                సిబ్బందికి స్వయంగా ఆదేశాలు ఇవ్వకూడదు.
-              </p>
-
-              <p>
-                The centre expects a safe, peaceful and respectful environment
-                for all patients, attendants and staff. Abusive, threatening,
-                violent, discriminatory or seriously disruptive behaviour
-                shall not be permitted.
-              </p>
-
-              <p>
-                అన్ని పేషెంట్లు, అటెండర్లు మరియు సిబ్బందికి సురక్షితమైన,
-                ప్రశాంతమైన మరియు గౌరవప్రదమైన వాతావరణం ఉండేలా చూడటం సెంటర్
-                ఉద్దేశ్యం. దురుసైన, బెదిరింపు, హింసాత్మక, వివక్షతో కూడిన లేదా
-                తీవ్రమైన అంతరాయం కలిగించే ప్రవర్తన అనుమతించబడదు.
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                CONFIDENTIALITY AND COMMUNICATION
-              </div>
-
-              <div className="section-heading-telugu">
-                గోప్యత మరియు సమాచార మార్పిడి
-              </div>
-
-              <p>
-                The centre shall handle patient information in accordance with
-                applicable professional, privacy and legal requirements. The
-                patient / authorised attendant may be contacted regarding
-                appointments, treatment schedules, care-related matters,
-                billing and necessary administrative communication.
-              </p>
-
-              <p>
-                సెంటర్ పేషెంట్ సమాచారాన్ని వర్తించే వృత్తిపరమైన, గోప్యతా మరియు
-                చట్టపరమైన నిబంధనలకు అనుగుణంగా నిర్వహిస్తుంది. అపాయింట్‌మెంట్లు,
-                చికిత్స షెడ్యూల్, సంరక్షణకు సంబంధించిన విషయాలు, బిల్లింగ్ మరియు
-                అవసరమైన పరిపాలనా సమాచారానికి సంబంధించి పేషెంట్ / అధీకృత
-                అటెండర్‌ను సంప్రదించవచ్చు.
-              </p>
-
-              <p>
-                <strong>
-                  Authorised Contact Person / అధీకృత సంప్రదింపు వ్యక్తి:
-                </strong>{" "}
-                {form.authorisedContact || "____________________________"}
-              </p>
-
-              <p>
-                <strong>Relationship / సంబంధం:</strong>{" "}
-                {form.authorisedRelationship || "________________"}{" "}
-                <strong>Mobile / మొబైల్:</strong>{" "}
-                {form.authorisedMobile || "________________"}
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">
-                LEAVE, DISCHARGE AND TERMINATION OF SERVICES
-              </div>
-
-              <div className="section-heading-telugu">
-                సెలవు, డిశ్చార్జ్ మరియు సేవల ముగింపు
-              </div>
-
-              <p>
-                Discharge shall ordinarily be planned in consultation with the
-                treating team and centre management. The patient / attendant
-                agrees to complete applicable billing, documentation and
-                discharge formalities before leaving the centre.
-              </p>
-
-              <p>
-                డిశ్చార్జ్ సాధారణంగా చికిత్సా బృందం మరియు సెంటర్ యాజమాన్యంతో
-                సంప్రదించి ప్రణాళిక చేయబడుతుంది. సెంటర్ నుండి వెళ్లే ముందు
-                వర్తించే బిల్లింగ్, పత్రాల మరియు డిశ్చార్జ్ ప్రక్రియలను
-                పూర్తి చేయడానికి పేషెంట్ / అటెండర్ అంగీకరిస్తున్నారు.
-              </p>
-
-              <p>
-                If the patient / attendant wishes to discontinue
-                rehabilitation or leave against professional advice, the
-                relevant documentation may be completed and the patient /
-                attendant may be requested to acknowledge the decision in
-                writing.
-              </p>
-
-              <p>
-                పేషెంట్ / అటెండర్ రిహాబిలిటేషన్‌ను నిలిపివేయాలని లేదా నిపుణుల
-                సూచనకు విరుద్ధంగా సెంటర్‌ను విడిచి వెళ్లాలని కోరుకుంటే,
-                సంబంధిత పత్రాలను పూర్తి చేయవలసి ఉండవచ్చు మరియు ఆ నిర్ణయాన్ని
-                లిఖితపూర్వకంగా ధృవీకరించమని కోరవచ్చు.
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">DECLARATION</div>
-
-              <div className="section-heading-telugu">తుది ప్రకటన</div>
-
-              <p>
-                I declare that I have read this entire document, or that the
-                contents have been read and explained to me in a language that
-                I understand. I have had an opportunity to ask questions and
-                obtain clarification. I understand the general nature of the
-                rehabilitation and care services, the responsibilities of the
-                patient / attendant, the financial obligations and the
-                procedures applicable in case of an emergency.
-              </p>
-
-              <p>
-                ఈ మొత్తం పత్రాన్ని నేను చదివాను / నాకు అర్థమయ్యే భాషలో దీని
-                విషయాలను పూర్తిగా చదివి వివరించారు. నాకు ఉన్న సందేహాలను అడిగి
-                తగిన వివరణ పొందే అవకాశం నాకు లభించింది. రిహాబిలిటేషన్ మరియు
-                సంరక్షణ సేవల సాధారణ స్వభావం, పేషెంట్ / అటెండర్ బాధ్యతలు,
-                ఆర్థిక బాధ్యతలు మరియు అత్యవసర పరిస్థితుల్లో అనుసరించే విధానం
-                గురించి నేను అర్థం చేసుకున్నాను.
-              </p>
-
-              <p>
-                I confirm that I am signing this document voluntarily and that
-                the information provided by me is true and accurate to the
-                best of my knowledge. I agree to comply with the terms stated
-                above and to cooperate with{" "}
-                <strong>ROSES Neuro Rehabilitation Centre</strong> for the
-                safe and appropriate care of the patient.
-              </p>
-
-              <p>
-                నేను ఎటువంటి బలవంతం లేకుండా స్వచ్ఛందంగా ఈ పత్రంపై సంతకం
-                చేస్తున్నాను. నేను అందించిన సమాచారం నా పరిజ్ఞానం మేరకు
-                నిజమైనది మరియు సరైనదని ధృవీకరిస్తున్నాను. పై పేర్కొన్న
-                నిబంధనలను పాటిస్తూ, పేషెంట్‌కు సురక్షితమైన మరియు తగిన
-                సంరక్షణ అందించేందుకు{" "}
-                <strong>ROSES Neuro Rehabilitation Centre</strong>తో
-                సహకరించడానికి అంగీకరిస్తున్నాను.
-              </p>
-            </section>
-
-            <section className="document-section">
-              <div className="section-heading">SIGNATURES / సంతకాలు</div>
-
-              <div className="signatures-grid">
-                <div className="signature-card">
-                  <div className="signature-heading">
-                    PATIENT / పేషెంట్
-                  </div>
-
-                  <p>
-                    <strong>Name / పేరు:</strong>{" "}
-                    {form.patientSignatureName ||
-                      form.patientName ||
-                      "____________________________"}
-                  </p>
-
-                  <div className="signature-line" />
-
-                  <div className="signature-meta">
-                    Signature / సంతకం
-                  </div>
-
-                  <p>
-                    <strong>Date / తేదీ:</strong>{" "}
-                    {formatDateDisplay(form.patientSignatureDate)}
-                  </p>
-                </div>
-
-                <div className="signature-card">
-                  <div className="signature-heading">
-                    ATTENDER / GUARDIAN / అటెండర్ / సంరక్షకుడు
-                  </div>
-
-                  <p>
-                    <strong>Name / పేరు:</strong>{" "}
-                    {form.attenderSignatureName ||
-                      form.attenderName ||
-                      "____________________________"}
-                  </p>
-
-                  <p>
-                    <strong>Relationship / సంబంధం:</strong>{" "}
-                    {form.attenderSignatureRelationship ||
-                      form.relationship ||
-                      "________________"}
-                  </p>
-
-                  <div className="signature-line" />
-
-                  <div className="signature-meta">
-                    Signature / సంతకం
-                  </div>
-
-                  <p>
-                    <strong>Date / తేదీ:</strong>{" "}
-                    {formatDateDisplay(form.attenderSignatureDate)}
-                  </p>
-                </div>
-
-                <div className="signature-card">
-                  <div className="signature-heading">
-                    WITNESS / సాక్షి
-                  </div>
-
-                  <p>
-                    <strong>Name / పేరు:</strong>{" "}
-                    {form.witnessName || "____________________________"}
-                  </p>
-
-                  <p>
-                    <strong>Mobile / మొబైల్:</strong>{" "}
-                    {form.witnessMobile || "________________"}
-                  </p>
-
-                  <div className="signature-line" />
-
-                  <div className="signature-meta">
-                    Signature / సంతకం
-                  </div>
-
-                  <p>
-                    <strong>Date / తేదీ:</strong>{" "}
-                    {formatDateDisplay(form.witnessDate)}
-                  </p>
-                </div>
-
-                <div className="signature-card">
-                  <div className="signature-heading">
-                    FOR ROSES NEURO REHABILITATION CENTRE / సెంటర్ తరఫున
-                  </div>
-
-                  <p>
-                    <strong>Representative Name / ప్రతినిధి పేరు:</strong>{" "}
-                    {form.representativeName || "____________________________"}
-                  </p>
-
-                  <p>
-                    <strong>Designation / హోదా:</strong>{" "}
-                    {form.designation || "____________________________"}
-                  </p>
-
-                  <div className="signature-line" />
-
-                  <div className="signature-meta">
-                    Signature / సంతకం
-                  </div>
-
-                  <p>
-                    <strong>Date / తేదీ:</strong>{" "}
-                    {formatDateDisplay(form.representativeDate)}
-                  </p>
-
-                  <p>
-                    <strong>CENTRE SEAL / సెంటర్ ముద్ర:</strong>
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="emergency-box">
-              <div className="section-heading">
-                EMERGENCY CONTACT DETAILS / అత్యవసర సంప్రదింపు వివరాలు
-              </div>
-
-              <p>
-                <strong>Primary Contact / ప్రధాన సంప్రదింపు:</strong>{" "}
-                {form.primaryContact || "____________________________"}
-              </p>
-
-              <p>
-                <strong>Relationship / సంబంధం:</strong>{" "}
-                {form.primaryRelationship || "________________"}{" "}
-                <strong>Mobile:</strong>{" "}
-                {form.primaryMobile || "________________"}
-              </p>
-
-              <p>
-                <strong>
-                  Alternate Contact / ప్రత్యామ్నాయ సంప్రదింపు:
-                </strong>{" "}
-                {form.alternateContact || "____________________________"}
-              </p>
-
-              <p>
-                <strong>Mobile / మొబైల్:</strong>{" "}
-                {form.alternateMobile || "____________________________"}
-              </p>
-            </section>
-
-            <footer className="document-footer">
-              <div>
-                <strong>Document No.:</strong>{" "}
-                {form.documentNo || "RNRC/CONSENT/____________"}
-              </div>
-
-              <div>
-                <strong>Revision No.:</strong>{" "}
-                {form.revisionNo || "________"}
-              </div>
-
-              <div>
-                <strong>Effective Date:</strong>{" "}
-                {formatDateDisplay(form.effectiveDate)}
-              </div>
-
-              <div style={{ marginTop: 7 }}>
-                <strong>ROSES NEURO REHABILITATION CENTRE</strong>
-              </div>
-
-              <div>
-                <em>
-                  Service • Hope • Humanity • Revival • Education
-                </em>
-              </div>
-
-              <div className="important-note">
-                <strong>IMPORTANT:</strong> This is a general patient consent
-                / undertaking format. Separate informed-consent documents
-                should be used wherever a particular medical procedure,
-                investigation, intervention or treatment requires specific
-                consent under applicable professional or legal requirements.
-              </div>
-            </footer>
-          </article>
-        </main>
-      </div>
+            <PrintField
+              label="Attender / Guardian Name / అటెండర్ / సంరక్షకుని పేరు"
+              value={form.attenderName}
+            />
+
+            <PrintField
+              label="Relationship / సంబంధం"
+              value={form.relationship}
+            />
+
+            <PrintField
+              label="Mobile / మొబైల్"
+              value={form.attenderMobile}
+            />
+
+            <PrintField
+              label="Emergency Contact / అత్యవసర సంప్రదింపు"
+              value={form.emergencyContact}
+            />
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            CONSENT, AGREEMENT AND UNDERTAKING
+          </div>
+
+          <div className="section-title-telugu">
+            అంగీకారం, ఒప్పందం మరియు బాధ్యత ప్రకటన
+          </div>
+
+          <p className="paragraph">
+            I, the undersigned patient / parent / guardian / authorised attendant, hereby voluntarily agree to admit and/or continue the above-mentioned patient at <strong>ROSES Neuro Rehabilitation Centre</strong> for appropriate rehabilitation, nursing care, physiotherapy, occupational and supportive rehabilitation services, medical supervision and other services considered necessary according to the patient's condition and the professional advice of the treating medical team.
+          </p>
+
+          <p className="paragraph">
+            నేను క్రింద సంతకం చేసిన పేషెంట్ / తల్లిదండ్రి / సంరక్షకుడు / అధీకృత అటెండర్‌గా, పై పేర్కొన్న పేషెంట్‌ను వారి ఆరోగ్య పరిస్థితికి అనుగుణంగా మరియు చికిత్స అందించే వైద్య బృందం / సంబంధిత నిపుణుల సూచనల మేరకు <strong>ROSES Neuro Rehabilitation Centre</strong>లో తగిన రిహాబిలిటేషన్, నర్సింగ్ కేర్, ఫిజియోథెరపీ, ఆక్యుపేషనల్ మరియు ఇతర సహాయక పునరావాస సేవలు, వైద్య పర్యవేక్షణ మరియు అవసరమైన ఇతర సేవల కోసం చేర్పించడానికి / కొనసాగించడానికి నా స్వచ్ఛంద అంగీకారాన్ని తెలియజేస్తున్నాను.
+          </p>
+
+          <p className="paragraph">
+            I confirm that the patient's relevant medical history, previous treatment details, current medicines, known allergies, previous operations, significant medical conditions and other information known to me have been disclosed to the centre to the best of my knowledge. I understand that incomplete or incorrect information may affect the assessment and care of the patient.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్‌కు సంబంధించిన వైద్య చరిత్ర, గత చికిత్స వివరాలు, ప్రస్తుతం ఉపయోగిస్తున్న మందులు, తెలిసిన అలర్జీలు, గత శస్త్రచికిత్సలు, ముఖ్యమైన ఆరోగ్య సమస్యలు మరియు నాకు తెలిసిన ఇతర సంబంధిత సమాచారాన్ని నా పరిజ్ఞానం మేరకు సెంటర్‌కు అందించినట్లు నేను ధృవీకరిస్తున్నాను. అసంపూర్ణమైన లేదా తప్పు సమాచారం పేషెంట్ పరిశీలన మరియు సంరక్షణపై ప్రభావం చూపవచ్చని నేను అర్థం చేసుకున్నాను.
+          </p>
+
+          <p className="paragraph">
+            I understand that neuro-rehabilitation is generally a gradual and ongoing process. The duration of rehabilitation and the level of improvement may differ from one patient to another and may depend on the patient's diagnosis, severity of illness, physical and cognitive condition, participation, cooperation, response to therapy and other medical or personal factors. No specific outcome or recovery time is guaranteed unless expressly stated in writing by the treating professional.
+          </p>
+
+          <p className="paragraph">
+            న్యూరో రిహాబిలిటేషన్ సాధారణంగా క్రమంగా మరియు నిరంతరం కొనసాగాల్సిన ప్రక్రియ అని నేను అర్థం చేసుకున్నాను. రిహాబిలిటేషన్ వ్యవధి మరియు పేషెంట్‌లో కనిపించే మెరుగుదల ప్రతి వ్యక్తిలో భిన్నంగా ఉండవచ్చు. పేషెంట్‌కు ఉన్న వైద్య నిర్ధారణ, సమస్య తీవ్రత, శారీరక మరియు మానసిక స్థితి, చికిత్సలో పాల్గొనడం, సహకారం, థెరపీకి స్పందన మరియు ఇతర వైద్య / వ్యక్తిగత అంశాలపై ఫలితాలు ఆధారపడి ఉండవచ్చు. చికిత్స అందించే నిపుణుడు ప్రత్యేకంగా లిఖితపూర్వకంగా హామీ ఇచ్చిన సందర్భం తప్ప, నిర్దిష్ట రికవరీ సమయం లేదా ఫలితానికి హామీ ఉండదని నేను అర్థం చేసుకున్నాను.
+          </p>
+
+          <p className="paragraph">
+            I agree that the patient will participate in the rehabilitation programme as reasonably possible and will follow the instructions provided by the doctors, physiotherapists, nurses, therapists and other authorised staff. I understand that regular participation, appropriate rest, nutrition, medication compliance and cooperation may be important for rehabilitation.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్ సాధ్యమైనంతవరకు రిహాబిలిటేషన్ కార్యక్రమంలో పాల్గొని, వైద్యులు, ఫిజియోథెరపిస్టులు, నర్సులు, థెరపిస్టులు మరియు ఇతర అధీకృత సిబ్బంది ఇచ్చే సూచనలను పాటించడానికి నేను అంగీకరిస్తున్నాను. క్రమమైన థెరపీ, తగిన విశ్రాంతి, పోషకాహారం, మందులను సూచించిన విధంగా తీసుకోవడం మరియు సహకారం రిహాబిలిటేషన్‌లో ముఖ్యమైన పాత్ర పోషించవచ్చని నేను అర్థం చేసుకున్నాను.
+          </p>
+
+          <p className="paragraph">
+            The centre may provide nursing and daily-care assistance according to the patient's assessed needs. Such assistance may include medication administration as prescribed, monitoring of vital signs when required, assistance with feeding, personal hygiene, positioning, mobility, transfer to a wheelchair, basic activities of daily living and other supportive care within the scope of services available at the centre.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్ అవసరాలను బట్టి సెంటర్ నర్సింగ్ మరియు రోజువారీ సంరక్షణలో సహాయం అందించవచ్చు. ఇందులో వైద్యుల సూచనల ప్రకారం మందులు అందించడం, అవసరమైనప్పుడు వైటల్ సైన్స్ పరిశీలించడం, ఫీడింగ్‌లో సహాయం, వ్యక్తిగత పరిశుభ్రత, పొజిషన్ మార్చడం, కదలికలో సహాయం, వీల్‌చైర్‌కు మార్చడంలో సహాయం, రోజువారీ ప్రాథమిక పనుల్లో సహాయం మరియు సెంటర్ పరిధిలో అందుబాటులో ఉన్న ఇతర సహాయక సేవలు ఉండవచ్చు.
+          </p>
+
+          <p className="paragraph">
+            I understand that physiotherapy, occupational therapy, speech and swallowing rehabilitation, cognitive rehabilitation or other specialised rehabilitation services may be recommended depending on the patient's condition and availability. The rehabilitation programme may be modified, increased, reduced, paused or discontinued based on clinical assessment and professional advice.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్ పరిస్థితిని బట్టి ఫిజియోథెరపీ, ఆక్యుపేషనల్ థెరపీ, స్పీచ్ మరియు స్వాలోయింగ్ రిహాబిలిటేషన్, కాగ్నిటివ్ రిహాబిలిటేషన్ లేదా ఇతర ప్రత్యేక పునరావాస సేవలు సూచించబడవచ్చు. వైద్య / క్లినికల్ పరిశీలన మరియు నిపుణుల సూచనల ఆధారంగా రిహాబిలిటేషన్ కార్యక్రమాన్ని మార్చడం, పెంచడం, తగ్గించడం, తాత్కాలికంగా నిలిపివేయడం లేదా ముగించడం జరగవచ్చని నేను అర్థం చేసుకున్నాను.
+          </p>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            MEDICATION, FEEDING AND MEDICAL INFORMATION
+          </div>
+
+          <div className="section-title-telugu">
+            మందులు, ఫీడింగ్ మరియు వైద్య సమాచారం
+          </div>
+
+          <p className="paragraph">
+            All medicines shall be administered or supervised according to the prescription and instructions of the treating medical professional. The patient / attendant shall not independently alter, stop, add or substitute medicines without informing the treating team. Any outside prescription, medicine or treatment brought by the family should be disclosed to the centre.
+          </p>
+
+          <p className="paragraph">
+            మందులు చికిత్స అందించే వైద్య నిపుణుల ప్రిస్క్రిప్షన్ మరియు సూచనల ప్రకారం మాత్రమే ఇవ్వబడతాయి / పర్యవేక్షించబడతాయి. వైద్య బృందానికి సమాచారం ఇవ్వకుండా పేషెంట్ / అటెండర్ స్వయంగా మందులను మార్చడం, నిలిపివేయడం, కొత్త మందులు కలపడం లేదా ప్రత్యామ్నాయ మందులు ఇవ్వకూడదు. కుటుంబ సభ్యులు బయట నుండి తీసుకువచ్చే ఏదైనా మందు లేదా చికిత్స గురించి సెంటర్‌కు సమాచారం ఇవ్వాలి.
+          </p>
+
+          <p className="paragraph">
+            Where feeding assistance is required, feeding shall be carried out according to the patient's assessed needs and the advice of the treating team. The attendant must inform the centre about swallowing difficulties, choking episodes, dietary restrictions, allergies or any previous feeding-related problem.
+          </p>
+
+          <p className="paragraph">
+            ఫీడింగ్‌లో సహాయం అవసరమైనప్పుడు, పేషెంట్ అవసరాలు మరియు చికిత్సా బృందం సూచనల ప్రకారం ఫీడింగ్ నిర్వహించబడుతుంది. మింగడంలో ఇబ్బంది, ఆహారం తీసుకునేటప్పుడు సమస్యలు, ఆహార పరిమితులు, అలర్జీలు లేదా గతంలో ఫీడింగ్‌కు సంబంధించిన సమస్యలు ఉంటే అటెండర్ సెంటర్‌కు తెలియజేయాలి.
+          </p>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            EMERGENCY AND TRANSFER
+          </div>
+
+          <div className="section-title-telugu">
+            అత్యవసర పరిస్థితులు మరియు ఆసుపత్రికి తరలింపు
+          </div>
+
+          <p className="paragraph">
+            I understand that rehabilitation centres may encounter situations in which a patient's medical condition changes unexpectedly or requires medical investigation, emergency treatment or hospital-level care. In such circumstances, the centre may advise or arrange, as appropriate, transfer or referral to a hospital / emergency medical facility. The emergency contact person will be informed as soon as reasonably possible.
+          </p>
+
+          <p className="paragraph">
+            రిహాబిలిటేషన్ సెంటర్‌లో ఉన్న సమయంలో పేషెంట్ ఆరోగ్య పరిస్థితి అనుకోకుండా మారవచ్చని లేదా వైద్య పరీక్షలు, అత్యవసర చికిత్స లేదా ఆసుపత్రి స్థాయి వైద్య సంరక్షణ అవసరం కావచ్చని నేను అర్థం చేసుకున్నాను. అలాంటి పరిస్థితుల్లో అవసరాన్ని బట్టి ఆసుపత్రి / అత్యవసర వైద్య కేంద్రానికి తరలించాలని సెంటర్ సూచించవచ్చు లేదా రిఫర్ చేయవచ్చు. సాధ్యమైనంత త్వరగా అత్యవసర సంప్రదింపు వ్యక్తికి సమాచారం అందించబడుతుంది.
+          </p>
+
+          <p className="paragraph">
+            The patient / attendant agrees to cooperate with reasonable emergency instructions and provide the necessary emergency contact and medical information without delay.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్ / అటెండర్ అత్యవసర పరిస్థితుల్లో సిబ్బంది ఇచ్చే తగిన సూచనలకు సహకరించి, అవసరమైన అత్యవసర సంప్రదింపు మరియు వైద్య సమాచారాన్ని ఆలస్యం లేకుండా అందించడానికి అంగీకరిస్తున్నారు.
+          </p>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            FINANCIAL TERMS AND PAYMENT RESPONSIBILITY
+          </div>
+
+          <div className="section-title-telugu">
+            ఆర్థిక నిబంధనలు మరియు చెల్లింపు బాధ్యత
+          </div>
+
+          <p className="paragraph">
+            I agree to pay all applicable charges for accommodation, nursing care, rehabilitation, physiotherapy, medicines, consumables, investigations, procedures, special services and other services provided to the patient, according to the applicable tariff, package or written quotation communicated by the centre.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్‌కు అందించే వసతి, నర్సింగ్ కేర్, రిహాబిలిటేషన్, ఫిజియోథెరపీ, మందులు, కన్స్యూమబుల్స్, పరీక్షలు, విధానాలు, ప్రత్యేక సేవలు మరియు ఇతర సేవలకు వర్తించే చార్జీలను సెంటర్ తెలియజేసిన టారిఫ్ / ప్యాకేజీ / లిఖితపూర్వక అంచనా ప్రకారం చెల్లించడానికి నేను అంగీకరిస్తున్నాను.
+          </p>
+
+          <div className="field-grid">
+            <PrintField
+              label="Admission / Deposit / అడ్మిషన్ / డిపాజిట్"
+              value={form.admissionDeposit}
+              prefix="₹ "
+            />
+
+            <PrintField
+              label="Room / Bed Charges / గది / బెడ్ చార్జీలు"
+              value={form.roomBedCharges}
+              prefix="₹ "
+            />
+
+            <PrintField
+              label="Daily / Monthly Package / రోజువారీ / నెలవారీ ప్యాకేజీ"
+              value={form.packageCharges}
+              prefix="₹ "
+            />
+
+            <PrintField
+              label="Other Charges / ఇతర చార్జీలు"
+              value={form.otherCharges}
+              prefix="₹ "
+            />
+
+            <PrintField
+              label="Payment Mode / చెల్లింపు విధానం"
+              value={form.paymentMode}
+            />
+          </div>
+
+          <p className="paragraph">
+            Additional investigations, medicines, procedures, consumables, emergency services or outside hospital services, where applicable, may involve additional charges. I agree to settle such applicable charges as per the centre's billing terms.
+          </p>
+
+          <p className="paragraph">
+            అవసరమైన అదనపు పరీక్షలు, మందులు, విధానాలు, కన్స్యూమబుల్స్, అత్యవసర సేవలు లేదా బయట ఆసుపత్రి సేవలకు వర్తించే అదనపు చార్జీలు ఉండవచ్చు. అలాంటి వర్తించే మొత్తాలను సెంటర్ బిల్లింగ్ నిబంధనల ప్రకారం చెల్లించడానికి నేను అంగీకరిస్తున్నాను.
+          </p>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            PATIENT BELONGINGS AND PERSONAL PROPERTY
+          </div>
+
+          <div className="section-title-telugu">
+            పేషెంట్ వ్యక్తిగత వస్తువులు
+          </div>
+
+          <p className="paragraph">
+            The patient / attendant is advised not to keep large amounts of cash, jewellery or other valuable personal belongings at the centre. Valuable items should preferably remain with the family / attendant. Any item specifically deposited with the centre should be recorded separately.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్ / అటెండర్ పెద్ద మొత్తంలో నగదు, నగలు లేదా ఇతర విలువైన వస్తువులను సెంటర్‌లో ఉంచకుండా కుటుంబ సభ్యుల వద్ద భద్రంగా ఉంచుకోవాలని సూచించబడింది. సెంటర్ వద్ద ప్రత్యేకంగా అప్పగించిన విలువైన వస్తువులు ఉంటే వాటిని విడిగా నమోదు చేయాలి.
+          </p>
+
+          <div className="field full">
+            <div className="field-label">
+              Items deposited with centre, if any / సెంటర్ వద్ద అప్పగించిన వస్తువులు
+            </div>
+
+            <div className="field-box">
+              {form.depositedItems || blank}
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            ATTENDER RESPONSIBILITIES
+          </div>
+
+          <div className="section-title-telugu">
+            అటెండర్ బాధ్యతలు
+          </div>
+
+          <p className="paragraph">
+            The patient / attendant agrees to provide complete cooperation to the rehabilitation team, follow reasonable centre rules, maintain respectful behaviour towards staff and other patients, provide correct medical information, inform the staff promptly about any change in the patient's condition and comply with safety instructions. The attendant shall not interfere with professional treatment decisions or independently instruct staff to change prescribed treatment.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్ / అటెండర్ రిహాబిలిటేషన్ బృందంతో పూర్తి సహకారం అందించాలి, సెంటర్‌లోని తగిన నియమాలను పాటించాలి, సిబ్బంది మరియు ఇతర పేషెంట్ల పట్ల గౌరవప్రదంగా ప్రవర్తించాలి, సరైన వైద్య సమాచారాన్ని అందించాలి, పేషెంట్ ఆరోగ్య పరిస్థితిలో ఏదైనా మార్పు ఉంటే వెంటనే సిబ్బందికి తెలియజేయాలి మరియు భద్రతా సూచనలను పాటించాలి. వైద్య నిపుణుల చికిత్సా నిర్ణయాల్లో అనవసరంగా జోక్యం చేసుకోకూడదు మరియు సూచించిన చికిత్సను మార్చమని సిబ్బందికి స్వయంగా ఆదేశాలు ఇవ్వకూడదు.
+          </p>
+
+          <p className="paragraph">
+            The centre expects a safe, peaceful and respectful environment for all patients, attendants and staff. Abusive, threatening, violent, discriminatory or seriously disruptive behaviour shall not be permitted.
+          </p>
+
+          <p className="paragraph">
+            అన్ని పేషెంట్లు, అటెండర్లు మరియు సిబ్బందికి సురక్షితమైన, ప్రశాంతమైన మరియు గౌరవప్రదమైన వాతావరణం ఉండేలా చూడటం సెంటర్ ఉద్దేశ్యం. దురుసైన, బెదిరింపు, హింసాత్మక, వివక్షతో కూడిన లేదా తీవ్రమైన అంతరాయం కలిగించే ప్రవర్తన అనుమతించబడదు.
+          </p>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            CONFIDENTIALITY AND COMMUNICATION
+          </div>
+
+          <div className="section-title-telugu">
+            గోప్యత మరియు సమాచార మార్పిడి
+          </div>
+
+          <p className="paragraph">
+            The centre shall handle patient information in accordance with applicable professional, privacy and legal requirements. The patient / authorised attendant may be contacted regarding appointments, treatment schedules, care-related matters, billing and necessary administrative communication.
+          </p>
+
+          <p className="paragraph">
+            సెంటర్ పేషెంట్ సమాచారాన్ని వర్తించే వృత్తిపరమైన, గోప్యతా మరియు చట్టపరమైన నిబంధనలకు అనుగుణంగా నిర్వహిస్తుంది. అపాయింట్‌మెంట్లు, చికిత్స షెడ్యూల్, సంరక్షణకు సంబంధించిన విషయాలు, బిల్లింగ్ మరియు అవసరమైన పరిపాలనా సమాచారానికి సంబంధించి పేషెంట్ / అధీకృత అటెండర్‌ను సంప్రదించవచ్చు.
+          </p>
+
+          <div className="field-grid">
+            <PrintField
+              label="Authorised Contact Person / అధీకృత సంప్రదింపు వ్యక్తి"
+              value={form.authorisedContact}
+            />
+
+            <PrintField
+              label="Relationship / సంబంధం"
+              value={form.authorisedRelationship}
+            />
+
+            <PrintField
+              label="Mobile / మొబైల్"
+              value={form.authorisedMobile}
+            />
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            LEAVE, DISCHARGE AND TERMINATION OF SERVICES
+          </div>
+
+          <div className="section-title-telugu">
+            సెలవు, డిశ్చార్జ్ మరియు సేవల ముగింపు
+          </div>
+
+          <p className="paragraph">
+            Discharge shall ordinarily be planned in consultation with the treating team and centre management. The patient / attendant agrees to complete applicable billing, documentation and discharge formalities before leaving the centre.
+          </p>
+
+          <p className="paragraph">
+            డిశ్చార్జ్ సాధారణంగా చికిత్సా బృందం మరియు సెంటర్ యాజమాన్యంతో సంప్రదించి ప్రణాళిక చేయబడుతుంది. సెంటర్ నుండి వెళ్లే ముందు వర్తించే బిల్లింగ్, పత్రాల మరియు డిశ్చార్జ్ ప్రక్రియలను పూర్తి చేయడానికి పేషెంట్ / అటెండర్ అంగీకరిస్తున్నారు.
+          </p>
+
+          <p className="paragraph">
+            If the patient / attendant wishes to discontinue rehabilitation or leave against professional advice, the relevant documentation may be completed and the patient / attendant may be requested to acknowledge the decision in writing.
+          </p>
+
+          <p className="paragraph">
+            పేషెంట్ / అటెండర్ రిహాబిలిటేషన్‌ను నిలిపివేయాలని లేదా నిపుణుల సూచనకు విరుద్ధంగా సెంటర్‌ను విడిచి వెళ్లాలని కోరుకుంటే, సంబంధిత పత్రాలను పూర్తి చేయవలసి ఉండవచ్చు మరియు ఆ నిర్ణయాన్ని లిఖితపూర్వకంగా ధృవీకరించమని కోరవచ్చు.
+          </p>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            DECLARATION
+          </div>
+
+          <div className="section-title-telugu">
+            తుది ప్రకటన
+          </div>
+
+          <p className="paragraph">
+            I declare that I have read this entire document, or that the contents have been read and explained to me in a language that I understand. I have had an opportunity to ask questions and obtain clarification. I understand the general nature of the rehabilitation and care services, the responsibilities of the patient / attendant, the financial obligations and the procedures applicable in case of an emergency.
+          </p>
+
+          <p className="paragraph">
+            ఈ మొత్తం పత్రాన్ని నేను చదివాను / నాకు అర్థమయ్యే భాషలో దీని విషయాలను పూర్తిగా చదివి వివరించారు. నాకు ఉన్న సందేహాలను అడిగి తగిన వివరణ పొందే అవకాశం నాకు లభించింది. రిహాబిలిటేషన్ మరియు సంరక్షణ సేవల సాధారణ స్వభావం, పేషెంట్ / అటెండర్ బాధ్యతలు, ఆర్థిక బాధ్యతలు మరియు అత్యవసర పరిస్థితుల్లో అనుసరించే విధానం గురించి నేను అర్థం చేసుకున్నాను.
+          </p>
+
+          <p className="paragraph">
+            I confirm that I am signing this document voluntarily and that the information provided by me is true and accurate to the best of my knowledge. I agree to comply with the terms stated above and to cooperate with <strong>ROSES Neuro Rehabilitation Centre</strong> for the safe and appropriate care of the patient.
+          </p>
+
+          <p className="paragraph">
+            నేను ఎటువంటి బలవంతం లేకుండా స్వచ్ఛందంగా ఈ పత్రంపై సంతకం చేస్తున్నాను. నేను అందించిన సమాచారం నా పరిజ్ఞానం మేరకు నిజమైనది మరియు సరైనదని ధృవీకరిస్తున్నాను. పై పేర్కొన్న నిబంధనలను పాటిస్తూ, పేషెంట్‌కు సురక్షితమైన మరియు తగిన సంరక్షణ అందించేందుకు <strong>ROSES Neuro Rehabilitation Centre</strong>తో సహకరించడానికి అంగీకరిస్తున్నాను.
+          </p>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            SIGNATURES / సంతకాలు
+          </div>
+
+          <div className="signatures">
+            <SignatureBox
+              title="PATIENT / పేషెంట్"
+              lines={[
+                `Name / పేరు: ${form.patientName || blank}`,
+                `Signature / సంతకం: ${blank}`,
+                `Date / తేదీ: ${displayDate(
+                  form.patientSignatureDate
+                )}`,
+              ]}
+            />
+
+            <SignatureBox
+              title="ATTENDER / GUARDIAN / అటెండర్ / సంరక్షకుడు"
+              lines={[
+                `Name / పేరు: ${form.attenderName || blank}`,
+                `Relationship / సంబంధం: ${
+                  form.relationship || blank
+                }`,
+                `Signature / సంతకం: ${blank}`,
+                `Date / తేదీ: ${displayDate(
+                  form.attenderSignatureDate
+                )}`,
+              ]}
+            />
+
+            <SignatureBox
+              title="WITNESS / సాక్షి"
+              lines={[
+                `Name / పేరు: ${form.witnessName || blank}`,
+                `Mobile / మొబైల్: ${
+                  form.witnessMobile || blank
+                }`,
+                `Signature / సంతకం: ${blank}`,
+                `Date / తేదీ: ${displayDate(
+                  form.witnessSignatureDate
+                )}`,
+              ]}
+            />
+
+            <SignatureBox
+              title="FOR ROSES NEURO REHABILITATION CENTRE / సెంటర్ తరఫున"
+              lines={[
+                `Representative Name / ప్రతినిధి పేరు: ${
+                  form.representativeName || blank
+                }`,
+                `Designation / హోదా: ${
+                  form.representativeDesignation ||
+                  blank
+                }`,
+                `Signature / సంతకం: ${blank}`,
+                `Date / తేదీ: ${displayDate(
+                  form.representativeSignatureDate
+                )}`,
+                `CENTRE SEAL / సెంటర్ ముద్ర: ${blank}`,
+              ]}
+            />
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            EMERGENCY CONTACT DETAILS / అత్యవసర సంప్రదింపు వివరాలు
+          </div>
+
+          <div className="field-grid">
+            <PrintField
+              label="Primary Contact / ప్రధాన సంప్రదింపు"
+              value={form.primaryContact}
+            />
+
+            <PrintField
+              label="Relationship / సంబంధం"
+              value={form.primaryRelationship}
+            />
+
+            <PrintField
+              label="Mobile"
+              value={form.primaryMobile}
+            />
+
+            <PrintField
+              label="Alternate Contact / ప్రత్యామ్నాయ సంప్రదింపు"
+              value={form.alternateContact}
+            />
+
+            <PrintField
+              label="Mobile / మొబైల్"
+              value={form.alternateMobile}
+            />
+          </div>
+        </section>
+
+        <footer className="footer">
+          <div>
+            <strong>Document No.:</strong>{" "}
+            {form.documentNo || blank}
+            {"   "}
+            <strong>Revision No.:</strong>{" "}
+            {form.revisionNo || blank}
+            {"   "}
+            <strong>Effective Date:</strong>{" "}
+            {displayDate(form.effectiveDate)}
+          </div>
+
+          <div style={{ marginTop: 8 }}>
+            <strong>
+              ROSES NEURO REHABILITATION CENTRE
+            </strong>
+          </div>
+
+          <div>
+            <em>
+              Service • Hope • Humanity • Revival • Education
+            </em>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <strong>IMPORTANT:</strong> This is a general patient
+            consent / undertaking format. Separate
+            informed-consent documents should be used wherever
+            a particular medical procedure, investigation,
+            intervention or treatment requires specific consent
+            under applicable professional or legal requirements.
+          </div>
+        </footer>
+      </main>
     </>
+  );
+}
+
+function EditorInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <div className="editor-field">
+      <label>{label}</label>
+
+      <input
+        type={type}
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+      />
+    </div>
+  );
+}
+
+function EditorTextarea({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="editor-field full">
+      <label>{label}</label>
+
+      <textarea
+        value={value}
+        onChange={(event) =>
+          onChange(event.target.value)
+        }
+      />
+    </div>
+  );
+}
+
+function PrintField({
+  label,
+  value,
+  prefix = "",
+}: {
+  label: string;
+  value: string;
+  prefix?: string;
+}) {
+  return (
+    <div className="field">
+      <div className="field-label">
+        {label}
+      </div>
+
+      <div className="field-value">
+        {value ? `${prefix}${value}` : "________________"}
+      </div>
+    </div>
+  );
+}
+
+function SignatureBox({
+  title,
+  lines,
+}: {
+  title: string;
+  lines: string[];
+}) {
+  return (
+    <div className="signature-box">
+      <div className="signature-title">
+        {title}
+      </div>
+
+      {lines.map((line, index) => (
+        <div
+          key={`${line}-${index}`}
+          style={{
+            fontSize: "9px",
+            lineHeight: 1.45,
+            marginTop: index === 0 ? 0 : 5,
+          }}
+        >
+          {line}
+        </div>
+      ))}
+    </div>
   );
 }
