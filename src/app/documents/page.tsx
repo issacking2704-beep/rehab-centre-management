@@ -212,10 +212,14 @@ export default function DocumentsPage() {
 
         const snapshot = await getDocs(collection(db, "patients"));
 
-        const loadedPatients: Patient[] = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Patient),
-        }));
+       const loadedPatients: Patient[] = snapshot.docs.map((doc) => {
+  const data = doc.data() as Omit<Patient, "id">;
+
+  return {
+    ...data,
+    id: doc.id,
+  };
+});
 
         loadedPatients.sort((a, b) =>
           getPatientName(a).localeCompare(getPatientName(b))
@@ -892,16 +896,17 @@ export default function DocumentsPage() {
                   }
                 />
 
-                <EditorInput
-                  label="Payment Mode"
-                  value={form.paymentMode}
-                  onChange={(value) =>
-                    updateField(
-                      "paymentMode",
-                      value
-                    )
-                  }
-              </div>
+             <EditorInput
+  label="Payment Mode"
+  value={form.paymentMode}
+  onChange={(value) =>
+    updateField(
+      "paymentMode",
+      value
+    )
+  }
+/>
+</div>
             </div>
 
             <div className="editor-section">
