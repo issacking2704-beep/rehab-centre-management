@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Patient = {
   id: string;
@@ -37,6 +38,7 @@ const emptyPatient: Omit<Patient, "id" | "createdAt"> = {
 };
 
 export default function PatientsPage() {
+  const router = useRouter();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -902,6 +904,75 @@ export default function PatientsPage() {
                   {selectedPatient.notes ||
                     "No notes recorded."}
                 </p>
+              </div>
+
+              {/* QUICK ACTIONS */}
+              <div>
+                <p className="mb-3 text-sm font-bold">
+                  Patient Services
+                </p>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/documents?patientId=${encodeURIComponent(selectedPatient.id)}`
+                      )
+                    }
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold hover:bg-slate-100"
+                  >
+                    📄 Consent
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/invoice?patientId=${encodeURIComponent(selectedPatient.id)}`
+                      )
+                    }
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold hover:bg-slate-100"
+                  >
+                    🧾 Invoice
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/vitals?patientId=${encodeURIComponent(selectedPatient.id)}`
+                      )
+                    }
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold hover:bg-slate-100"
+                  >
+                    ❤️ Vitals
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/payments?patientId=${encodeURIComponent(selectedPatient.id)}`
+                      )
+                    }
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold hover:bg-slate-100"
+                  >
+                    💰 Payments
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/reports?patientId=${encodeURIComponent(selectedPatient.id)}`
+                      )
+                    }
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold hover:bg-slate-100"
+                  >
+                    📁 Reports
+                  </button>
+                </div>
               </div>
 
               <div className="flex justify-end gap-3">

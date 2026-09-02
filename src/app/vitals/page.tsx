@@ -96,6 +96,23 @@ export default function VitalsPage() {
     setLoaded(true);
   }, []);
 
+  /* ================= PATIENT PROFILE INTEGRATION ================= */
+
+  useEffect(() => {
+    const patientIdFromUrl = new URLSearchParams(
+      window.location.search
+    ).get("patientId");
+
+    if (!patientIdFromUrl) return;
+
+    setForm((current) => ({
+      ...current,
+      patientId: patientIdFromUrl,
+    }));
+
+    setPatientFilter(patientIdFromUrl);
+  }, []);
+
   /* ================= SAVE DATA ================= */
 
   useEffect(() => {

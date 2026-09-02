@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -239,7 +240,10 @@ function getPatientMobile(patient: Patient) {
   );
 }
 
-export default function DocumentsPage() {
+function DocumentsPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loadingPatients, setLoadingPatients] = useState(true);
   const [patientError, setPatientError] = useState("");
@@ -318,6 +322,26 @@ export default function DocumentsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const patientId = searchParams.get("patientId");
+
+    if (!patientId || patients.length === 0) {
+      return;
+    }
+
+    const patient = patients.find(
+      (item) => item.id === patientId
+    );
+
+    if (!patient) {
+      return;
+    }
+
+    if (selectedPatientId !== patientId) {
+      selectPatient(patientId);
+    }
+  }, [searchParams, patients, selectedPatientId]);
 
   function updateField(
     field: keyof FormData,
@@ -2039,3 +2063,26 @@ function SignatureBox({
     </div>
   );
 }
+export default function DocumentsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontFamily: "Arial, sans-serif",
+          }}
+        >
+          Loading patient consent module...
+        </div>
+      }
+    >
+      <DocumentsPageContent />
+    </Suspense>
+  );
+}
+
+

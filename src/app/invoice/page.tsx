@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type InvoiceItem = {
   id: number;
@@ -73,6 +75,69 @@ export default function InvoicePage() {
 
   const [items, setItems] =
     useState<InvoiceItem[]>(initialItems);
+
+  /* ================= PATIENT PROFILE INTEGRATION ================= */
+
+  useEffect(() => {
+    const queryPatientId = new URLSearchParams(
+      window.location.search
+    ).get("patientId");
+
+    if (!queryPatientId) return;
+
+    const patientIdFromUrl = queryPatientId;
+
+    async function loadPatient() {
+      try {
+        const patientRef = doc(
+          db,
+          "patients",
+          patientIdFromUrl
+        );
+
+        const patientSnap = await getDoc(patientRef);
+
+        if (!patientSnap.exists()) {
+          console.warn(
+            "Patient not found:",
+            queryPatientId
+          );
+          return;
+        }
+
+        const patient = patientSnap.data();
+
+        const name =
+          patient.name ??
+          patient.patientName ??
+          patient.fullName ??
+          "";
+
+        const phone =
+          patient.phone ??
+          patient.mobile ??
+          patient.attenderMobile ??
+          "";
+
+        const patientAddr =
+          patient.address ??
+          patient.permanentAddress ??
+          "";
+
+        setPatientId(patientIdFromUrl);
+        setPatientName(String(name));
+        setPatientPhone(String(phone));
+        setPatientAddress(String(patientAddr));
+      } catch (error) {
+        console.error(
+          "Error loading patient for invoice:",
+          error
+        );
+      }
+    }
+
+    loadPatient();
+  }, []);
 
   /* ================= CALCULATIONS ================= */
 
