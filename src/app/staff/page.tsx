@@ -37,9 +37,38 @@ export default function StaffPage() {
   async function authFetch(url: string, options: RequestInit = {}) {
     if (!user) throw new Error("You must be logged in.");
     const token = await user.getIdToken(true);
-    const response = await fetch(url, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, cache: "no-store" });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Request failed.");
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    });
+
+    // Do not blindly call response.json(): Vercel/Next.js can return an empty
+    // or non-JSON error response before the route handler gets control.
+    const raw = await response.text();
+    let data: Record<string, unknown> = {};
+    if (raw.trim()) {
+      try {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") data = parsed as Record<string, unknown>;
+      } catch {
+        if (!response.ok) {
+          throw new Error(`Server returned HTTP ${response.status} without a valid JSON error response.`);
+        }
+      }
+    }
+
+    if (!response.ok) {
+      const apiError = typeof data.error === "string" ? data.error : "Request failed on the server.";
+      const category = typeof data.category === "string" ? ` [${data.category}]` : "";
+      throw new Error(`${apiError}${category}`);
+    }
+
+    if (!raw.trim()) throw new Error("Server returned an empty response.");
     return data;
   }
 
@@ -47,8 +76,8 @@ export default function StaffPage() {
     try {
       setLoading(true); setError("");
       const [staffData, attenderData] = await Promise.all([authFetch("/api/staff"), authFetch("/api/patient-attenders")]);
-      setStaff(Array.isArray(staffData.staff) ? staffData.staff : []);
-      setPatients(Array.isArray(attenderData.patients) ? attenderData.patients : []);
+      setStaff(Array.isArray(staffData.staff) ? staffData.staff as Staff[] : []);
+      setPatients(Array.isArray(attenderData.patients) ? attenderData.patients as Patient[] : []);
     } catch (err: any) { setError(err?.message || "Failed to load staff."); } finally { setLoading(false); }
   }
 
@@ -57,21 +86,21 @@ export default function StaffPage() {
     try {
       setSaving(true); setError(""); setMessage(""); setShowPasskey("");
       const data = await authFetch("/api/staff", { method: "POST", body: JSON.stringify({ name, email, password, phone, role, assignedPatientIds: role === "patient_attender" ? selectedPatients : [] }) });
-      setMessage(data.message || "Staff account created.");
-      if (data.passkey) setShowPasskey(data.passkey);
+      setMessage(typeof data.message === "string" ? data.message : "Staff account created.");
+      if (typeof data.passkey === "string") setShowPasskey(data.passkey);
       setName(""); setEmail(""); setPassword(""); setPhone(""); setSelectedPatients([]); setRole("patient_attender"); setShowAdd(false);
       await load();
     } catch (err: any) { setError(err?.message || "Failed to create staff account."); } finally { setSaving(false); }
   }
 
   async function toggle(person: Staff) {
-    try { setError(""); setMessage(""); const data = await authFetch("/api/staff", { method: "PATCH", body: JSON.stringify({ uid: person.uid, active: !person.active }) }); setMessage(data.message); await load(); }
+    try { setError(""); setMessage(""); const data = await authFetch("/api/staff", { method: "PATCH", body: JSON.stringify({ uid: person.uid, active: !person.active }) }); setMessage(typeof data.message === "string" ? data.message : "Staff account updated."); await load(); }
     catch (err: any) { setError(err?.message || "Failed to update account."); }
   }
 
   async function remove(person: Staff) {
     if (!window.confirm(`Delete ${person.name}? This cannot be undone.`)) return;
-    try { setError(""); setMessage(""); const data = await authFetch("/api/staff", { method: "DELETE", body: JSON.stringify({ uid: person.uid }) }); setMessage(data.message); await load(); }
+    try { setError(""); setMessage(""); const data = await authFetch("/api/staff", { method: "DELETE", body: JSON.stringify({ uid: person.uid }) }); setMessage(typeof data.message === "string" ? data.message : "Staff account deleted."); await load(); }
     catch (err: any) { setError(err?.message || "Failed to delete account."); }
   }
 
@@ -79,13 +108,13 @@ export default function StaffPage() {
 
   async function saveAssignments() {
     if (!assigning) return;
-    try { setSaving(true); setError(""); const data = await authFetch("/api/patient-attenders", { method: "PATCH", body: JSON.stringify({ uid: assigning.uid, assignedPatientIds: selectedPatients }) }); setMessage(data.message); setAssigning(null); await load(); }
+    try { setSaving(true); setError(""); const data = await authFetch("/api/patient-attenders", { method: "PATCH", body: JSON.stringify({ uid: assigning.uid, assignedPatientIds: selectedPatients }) }); setMessage(typeof data.message === "string" ? data.message : "Patient assignments updated."); setAssigning(null); await load(); }
     catch (err: any) { setError(err?.message || "Failed to update assignments."); } finally { setSaving(false); }
   }
 
   async function regenerate(person: Staff) {
     if (!window.confirm(`Generate a new passkey for ${person.name}? The old passkey will stop working.`)) return;
-    try { setError(""); setMessage(""); const data = await authFetch("/api/patient-attenders", { method: "POST", body: JSON.stringify({ uid: person.uid }) }); setShowPasskey(data.passkey || ""); setMessage(data.message); await load(); }
+    try { setError(""); setMessage(""); const data = await authFetch("/api/patient-attenders", { method: "POST", body: JSON.stringify({ uid: person.uid }) }); setShowPasskey(typeof data.passkey === "string" ? data.passkey : ""); setMessage(typeof data.message === "string" ? data.message : "Passkey regenerated."); await load(); }
     catch (err: any) { setError(err?.message || "Failed to regenerate passkey."); }
   }
 
