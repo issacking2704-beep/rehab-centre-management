@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rehab Centre Management System
 
-## Getting Started
+A responsive Next.js + Firebase management system for rehabilitation centres. The project is designed for desktop, tablet and Android PWA use.
 
-First, run the development server:
+## Included modules
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- 🔐 Firebase Authentication with role-based access
+- 📊 Dashboard and operational overview
+- 🧑‍⚕️ Patient management
+- 🗑️ Deleted Patients / restore workflow
+- 👨‍⚕️ Doctors & Staff management
+- 🕒 Staff attendance
+- ❤️ Patient vitals and clinical monitoring
+- 💳 Payments & bills
+- 🧾 Invoice generator
+- 📜 Letterhead / document maker
+- 📁 Patient files and reports
+- ⚙️ Settings and centre configuration
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Roles
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Super Admin, Admin, Doctor, Staff, Accounts, Reception and Viewer are supported. Legacy `sub_admin` and `patient_attender` roles remain supported for existing Firebase profiles.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tech stack
 
-## Learn More
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Storage
 
-To learn more about Next.js, take a look at the following resources:
+## Local setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Install Node.js 20+.
+2. Copy `.env.example` to `.env.local`.
+3. Fill in the Firebase Web SDK values.
+4. Keep Firebase Admin credentials server-only; never prefix them with `NEXT_PUBLIC_`.
+5. Run `npm install`.
+6. Run `npm run dev`.
+7. Open the local development URL shown by Next.js.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Firebase security
 
-## Deploy on Vercel
+`firestore.rules` and `storage.rules` provide role-based starting rules. Review them against the exact data model before production deployment, then deploy them through the Firebase CLI or Firebase Console.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Do not put real patient records, passwords, service-account private keys, or other secrets into GitHub. Use environment variables and Firebase security rules.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## PWA
+
+The app includes a web manifest and responsive viewport configuration so it can be installed from a supported mobile browser. A production deployment should also use HTTPS and a proper app icon set.
+
+## Important production checklist
+
+- Configure Firebase Authentication providers.
+- Create a `users/{uid}` profile for every authorized account with a valid `role`.
+- Deploy and test Firestore/Storage rules.
+- Replace demo dashboard values with live aggregate queries.
+- Test backups, restore procedures and audit logging.
+- Test invoice/letterhead output on A4 printers and PDF export.
+- Deploy with HTTPS and configure the production domain.
+
+## Repository safety
+
+This repository should remain private while the system is being developed. Never commit `.env.local`, Firebase Admin private keys, patient information, medical reports, or payment credentials.
