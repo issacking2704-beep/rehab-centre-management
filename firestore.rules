@@ -25,7 +25,7 @@ service cloud.firestore {
     }
 
     function canReadClinical() {
-      return role() in ['super_admin', 'admin', 'sub_admin', 'doctor', 'staff', 'viewer', 'patient_attender'];
+      return role() in ['super_admin', 'admin', 'sub_admin', 'doctor', 'staff', 'viewer'];
     }
 
     function canOperateBilling() {
@@ -45,7 +45,7 @@ service cloud.firestore {
 
     match /vitals/{vitalId} {
       allow read: if canReadClinical();
-      allow create, update: if role() in ['super_admin', 'admin', 'sub_admin', 'doctor', 'staff', 'patient_attender'];
+      allow create, update: if role() in ['super_admin', 'admin', 'sub_admin', 'doctor', 'staff'];
       allow delete: if isAdmin();
     }
 
@@ -82,6 +82,10 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create, update: if isAdmin();
       allow delete: if isSuperAdmin();
+    }
+
+    match /patientAttenderPasskeys/{passkeyId} {
+      allow read, write: if false;
     }
 
     match /{document=**} {
