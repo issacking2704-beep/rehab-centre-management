@@ -64,6 +64,7 @@ export default function Home() {
   if (loading || !profile || !user) return <main className="flex min-h-screen items-center justify-center bg-slate-100"><div className="text-center"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-3xl">🏥</div><p className="mt-4 text-sm text-slate-500">Loading your dashboard…</p></div></main>;
 
   const role = profile.role;
+  if (!role) return null;
   const visibleModules = modules.filter((module) => permissions[role]?.includes(module.permission));
   const displayRole = role === "super_admin" ? "Super Admin" : role === "admin" ? "Admin" : role === "sub_admin" ? "Sub Admin" : role;
 
