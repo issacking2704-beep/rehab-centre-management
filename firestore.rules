@@ -1,0 +1,91 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function role() {
+      return signedIn()
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isSuperAdmin() {
+      return role() == 'super_admin';
+    }
+
+    function isAdmin() {
+      return role() in ['super_admin', 'admin'];
+    }
+
+    function canOperatePatients() {
+      return role() in ['super_admin', 'admin', 'sub_admin', 'reception', 'staff'];
+    }
+
+    function canReadClinical() {
+      return role() in ['super_admin', 'admin', 'sub_admin', 'doctor', 'staff', 'viewer', 'patient_attender'];
+    }
+
+    function canOperateBilling() {
+      return role() in ['super_admin', 'admin', 'accounts', 'reception'];
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /patients/{patientId} {
+      allow read: if canReadClinical();
+      allow create, update: if canOperatePatients();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /vitals/{vitalId} {
+      allow read: if canReadClinical();
+      allow create, update: if role() in ['super_admin', 'admin', 'sub_admin', 'doctor', 'staff', 'patient_attender'];
+      allow delete: if isAdmin();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if signedIn();
+      allow create, update: if role() in ['super_admin', 'admin', 'sub_admin', 'staff', 'reception'];
+      allow delete: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if canOperateBilling();
+      allow create, update: if canOperateBilling();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read, create, update: if canOperateBilling();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /reports/{reportId} {
+      allow read: if canReadClinical() || canOperateBilling();
+      allow create, update: if isAdmin() || role() in ['doctor', 'accounts'];
+      allow delete: if isSuperAdmin();
+    }
+
+    match /documents/{documentId} {
+      allow read: if signedIn();
+      allow create, update: if role() in ['super_admin', 'admin', 'doctor', 'staff', 'accounts', 'reception'];
+      allow delete: if isAdmin();
+    }
+
+    match /deletedPatients/{patientId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
