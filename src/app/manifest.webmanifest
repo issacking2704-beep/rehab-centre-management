@@ -1,0 +1,13 @@
+{
+  "name": "Rehab Centre Management System",
+  "short_name": "Rehab Centre",
+  "description": "Secure rehabilitation centre management system.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f172a",
+  "lang": "en-IN",
+  "categories": ["business", "medical", "productivity"]
+}
