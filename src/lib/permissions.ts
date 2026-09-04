@@ -6,85 +6,19 @@ export type UserRole =
   | "accounts"
   | "reception"
   | "viewer"
-  // Legacy roles kept for existing user profiles.
   | "sub_admin"
   | "patient_attender";
 
 export const permissions: Record<UserRole, string[]> = {
-  super_admin: [
-    "dashboard",
-    "patients",
-    "staff",
-    "attendance",
-    "vitals",
-    "billing",
-    "invoices",
-    "letterhead",
-    "documents",
-    "reports",
-    "settings",
-    "deleted_patients",
-  ],
-  admin: [
-    "dashboard",
-    "patients",
-    "staff",
-    "attendance",
-    "vitals",
-    "billing",
-    "invoices",
-    "letterhead",
-    "documents",
-    "reports",
-  ],
-  doctor: [
-    "dashboard",
-    "patients",
-    "vitals",
-    "reports",
-    "documents",
-  ],
-  staff: [
-    "dashboard",
-    "patients",
-    "attendance",
-    "vitals",
-    "documents",
-  ],
-  accounts: [
-    "dashboard",
-    "patients",
-    "billing",
-    "invoices",
-    "reports",
-    "documents",
-  ],
-  reception: [
-    "dashboard",
-    "patients",
-    "attendance",
-    "billing",
-    "invoices",
-    "documents",
-  ],
-  viewer: [
-    "dashboard",
-    "patients",
-    "vitals",
-    "reports",
-  ],
-  sub_admin: [
-    "dashboard",
-    "patients",
-    "vitals",
-    "attendance",
-  ],
-  patient_attender: [
-    "dashboard",
-    "patients",
-    "vitals",
-    "attendance",
-  ],
+  super_admin: ["dashboard", "patients", "staff", "attendance", "vitals", "billing", "invoices", "letterhead", "documents", "reports", "settings", "deleted_patients"],
+  admin: ["dashboard", "patients", "staff", "attendance", "vitals", "billing", "invoices", "letterhead", "documents", "reports"],
+  doctor: ["dashboard", "patients", "vitals", "reports", "documents"],
+  staff: ["dashboard", "patients", "attendance", "vitals", "documents"],
+  accounts: ["dashboard", "patients", "billing", "invoices", "reports", "documents"],
+  reception: ["dashboard", "patients", "attendance", "billing", "invoices", "documents"],
+  viewer: ["dashboard", "patients", "vitals", "reports"],
+  sub_admin: ["dashboard", "patients", "vitals", "attendance"],
+  patient_attender: ["dashboard", "attender_portal"],
 };
 
 export const roleLabels: Record<UserRole, string> = {
@@ -99,10 +33,7 @@ export const roleLabels: Record<UserRole, string> = {
   patient_attender: "Patient Attender",
 };
 
-export function hasPermission(
-  role: UserRole,
-  permission: string
-): boolean {
+export function hasPermission(role: UserRole, permission: string): boolean {
   return permissions[role]?.includes(permission) ?? false;
 }
 
