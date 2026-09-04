@@ -18,10 +18,10 @@ async function requireManager(request: NextRequest) {
   const decoded = await adminAuth.verifyIdToken(authorization.substring(7).trim());
   const snapshot = await adminDb.collection("users").doc(decoded.uid).get();
   const role = snapshot.data()?.role;
-  if (!snapshot.exists || !["super_admin", "admin", "sub_admin"].includes(role)) {
+  if (!snapshot.exists || !["super_admin", "admin", "sub_admin"].includes(String(role))) {
     throw new Error("You do not have permission to manage Patient Attenders.");
   }
-  return { uid: decoded.uid, role };
+  return { uid: decoded.uid, role: String(role) };
 }
 
 function serializeDate(value: any): string {
@@ -81,9 +81,10 @@ export async function PATCH(request: NextRequest) {
     await requireManager(request);
     const body = await request.json();
     const uid = String(body.uid || "").trim();
-    const assignedPatientIds = Array.isArray(body.assignedPatientIds)
-      ? [...new Set(body.assignedPatientIds.map((id: unknown) => String(id).trim()).filter(Boolean))]
+    const assignedPatientIds: string[] = Array.isArray(body.assignedPatientIds)
+      ? body.assignedPatientIds.map((id: unknown) => String(id).trim()).filter(Boolean)
       : [];
+    const uniquePatientIds = [...new Set(assignedPatientIds)];
 
     if (!uid) return errorResponse("Patient Attender UID is required.");
 
@@ -94,16 +95,16 @@ export async function PATCH(request: NextRequest) {
     }
 
     const validPatientIds = new Set<string>();
-    if (assignedPatientIds.length) {
+    if (uniquePatientIds.length) {
       const snapshots = await Promise.all(
-        assignedPatientIds.map((id) => adminDb.collection("patients").doc(id).get())
+        uniquePatientIds.map((id: string) => adminDb.collection("patients").doc(String(id)).get())
       );
       snapshots.forEach((snapshot) => {
         if (snapshot.exists && snapshot.data()?.isDeleted !== true) validPatientIds.add(snapshot.id);
       });
     }
 
-    const cleanIds = assignedPatientIds.filter((id) => validPatientIds.has(id));
+    const cleanIds = uniquePatientIds.filter((id: string) => validPatientIds.has(id));
     await staffRef.update({ assignedPatientIds: cleanIds, updatedAt: new Date() });
 
     return NextResponse.json({ success: true, assignedPatientIds: cleanIds, message: "Patient assignments updated." });
@@ -129,13 +130,13 @@ export async function POST(request: NextRequest) {
 
     const passkey = generatePatientAttenderPasskey();
     const hash = hashPatientAttenderPasskey(passkey);
-    const existing = await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(hash).get();
+    const existing = await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(String(hash)).get();
     if (existing.exists) return errorResponse("Passkey collision. Please try again.", 409);
 
     const oldHash = staffSnapshot.data()?.passkeyHash;
     const batch = adminDb.batch();
-    if (oldHash) batch.delete(adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(oldHash));
-    batch.set(adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(hash), {
+    if (oldHash) batch.delete(adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(String(oldHash)));
+    batch.set(adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(String(hash)), {
       uid,
       active: staffSnapshot.data()?.active !== false,
       createdAt: new Date(),
