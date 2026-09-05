@@ -34,7 +34,6 @@ function serializeDate(value: any): string {
 export async function GET(request: NextRequest) {
   try {
     await requireManager(request);
-
     const [staffSnapshot, patientSnapshot] = await Promise.all([
       adminDb.collection("users").where("role", "==", "patient_attender").get(),
       adminDb.collection("patients").get(),
@@ -129,13 +128,16 @@ export async function POST(request: NextRequest) {
 
     const passkey = generatePatientAttenderPasskey();
     const hash = hashPatientAttenderPasskey(passkey);
-    const existing = await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(hash).get();
+    const passkeyCollection = adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION);
+    const existing = await passkeyCollection.doc(hash).get();
     if (existing.exists) return errorResponse("Passkey collision. Please try again.", 409);
 
-    const oldHash = staffSnapshot.data()?.passkeyHash;
+    const oldHashValue = staffSnapshot.data()?.passkeyHash;
+    const oldHash = typeof oldHashValue === "string" ? oldHashValue : "";
     const batch = adminDb.batch();
-    if (oldHash) batch.delete(adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(oldHash));
-    batch.set(adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(hash), {
+    if (oldHash) batch.delete(passkeyCollection.doc(oldHash));
+
+    batch.set(passkeyCollection.doc(hash), {
       uid,
       active: staffSnapshot.data()?.active !== false,
       createdAt: new Date(),
