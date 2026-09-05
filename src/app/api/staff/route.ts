@@ -133,7 +133,8 @@ export async function POST(request: NextRequest) {
         userData.passkeyLast4 = passkey.slice(-4);
         userData.passkeyCreatedAt = new Date();
         userData.passkeyLastUsedAt = null;
-        await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(passkeyHash).set({
+        const passkeyCollection = adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION);
+        await passkeyCollection.doc(passkeyHash).set({
           uid: userRecord.uid,
           active: true,
           createdAt: new Date(),
@@ -144,7 +145,9 @@ export async function POST(request: NextRequest) {
     } catch (firestoreError) {
       try { await adminAuth.deleteUser(userRecord.uid); } catch (cleanupError) { console.error("Failed to cleanup Auth user:", cleanupError); }
       if (passkeyHash) {
-        try { await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(passkeyHash).delete(); } catch {}
+        try {
+          await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(passkeyHash).delete();
+        } catch {}
       }
       throw firestoreError;
     }
@@ -181,8 +184,9 @@ export async function PATCH(request: NextRequest) {
     await adminAuth.updateUser(uid, { disabled: !active });
     await staffRef.update({ active });
 
-    if (staffData.role === "patient_attender" && staffData.passkeyHash) {
-      await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(staffData.passkeyHash).update({ active });
+    const passkeyHash = typeof staffData.passkeyHash === "string" ? staffData.passkeyHash : "";
+    if (staffData.role === "patient_attender" && passkeyHash) {
+      await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(passkeyHash).update({ active });
     }
 
     return NextResponse.json({ success: true, message: active ? "Staff account enabled." : "Staff account disabled." });
@@ -208,8 +212,9 @@ export async function DELETE(request: NextRequest) {
     if (staffData.role === "super_admin") return errorResponse("The Super Admin account cannot be deleted.", 403);
 
     await adminAuth.deleteUser(uid);
-    if (staffData.passkeyHash) {
-      await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(staffData.passkeyHash).delete();
+    const passkeyHash = typeof staffData.passkeyHash === "string" ? staffData.passkeyHash : "";
+    if (passkeyHash) {
+      await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(passkeyHash).delete();
     }
     await staffRef.delete();
     return NextResponse.json({ success: true, message: "Staff account deleted." });
