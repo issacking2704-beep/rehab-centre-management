@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { collection, deleteDoc, doc, getDocs, addDoc, updateDoc, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type Staff = {
   id: string;
@@ -71,30 +73,19 @@ export default function AttendancePage() {
   /* ================= LOAD ================= */
 
   useEffect(() => {
-    try {
-      const savedStaff =
-        localStorage.getItem(STAFF_KEY);
-
-      const savedAttendance =
-        localStorage.getItem(
-          ATTENDANCE_KEY
-        );
-
-      if (savedStaff) {
-        setStaff(JSON.parse(savedStaff));
+    async function loadData() {
+      try {
+        const [staffSnap, attendanceSnap] = await Promise.all([
+          getDocs(collection(db, "staff")),
+          getDocs(query(collection(db, "attendance"), orderBy("date", "desc"))),
+        ]);
+        setStaff(staffSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Staff)));
+        setRecords(attendanceSnap.docs.map((d) => ({ id: d.id, ...d.data() } as AttendanceRecord)));
+      } catch (error) {
+        console.error("Unable to load attendance data", error);
       }
-
-      if (savedAttendance) {
-        setRecords(
-          JSON.parse(savedAttendance)
-        );
-      }
-    } catch (error) {
-      console.error(
-        "Unable to load attendance data",
-        error
-      );
     }
+    void loadData();
 
     const today = new Date()
       .toISOString()
@@ -254,7 +245,7 @@ export default function AttendancePage() {
 
   /* ================= SAVE ================= */
 
-  function saveAttendance() {
+  async function saveAttendance() {
     if (!form.staffId) {
       alert("Please select a staff member.");
       return;
@@ -298,30 +289,9 @@ export default function AttendancePage() {
     }
 
     if (editingId) {
-      setRecords((current) =>
-        current.map((record) =>
-          record.id === editingId
-            ? {
-                ...record,
-                staffId:
-                  member.id,
-                employeeId:
-                  member.employeeId,
-                staffName:
-                  member.name,
-                role: member.role,
-                date: form.date,
-                status:
-                  form.status,
-                checkIn:
-                  form.checkIn,
-                checkOut:
-                  form.checkOut,
-                notes: form.notes,
-              }
-            : record
-        )
-      );
+      const updated = { staffId: member.id, employeeId: member.employeeId, staffName: member.name, role: member.role, date: form.date, status: form.status, checkIn: form.checkIn, checkOut: form.checkOut, notes: form.notes };
+      await updateDoc(doc(db, "attendance", editingId), updated);
+      setRecords((current) => current.map((record) => record.id === editingId ? { ...record, ...updated } : record));
 
       closeForm();
       return;
@@ -341,17 +311,15 @@ export default function AttendancePage() {
       notes: form.notes,
     };
 
-    setRecords((current) => [
-      newRecord,
-      ...current,
-    ]);
+    const created = await addDoc(collection(db, "attendance"), { ...newRecord, createdAt: new Date().toISOString() });
+    setRecords((current) => [{ ...newRecord, id: created.id }, ...current]);
 
     closeForm();
   }
 
   /* ================= DELETE ================= */
 
-  function deleteAttendance(
+  async function deleteAttendance(
     record: AttendanceRecord
   ) {
     const confirmed =
@@ -363,11 +331,8 @@ export default function AttendancePage() {
 
     if (!confirmed) return;
 
-    setRecords((current) =>
-      current.filter(
-        (item) => item.id !== record.id
-      )
-    );
+    await deleteDoc(doc(db, "attendance", record.id));
+    setRecords((current) => current.filter((item) => item.id !== record.id));
 
     setSelectedRecord(null);
   }
