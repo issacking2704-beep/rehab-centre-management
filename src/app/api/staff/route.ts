@@ -8,7 +8,7 @@ import {
 
 export const runtime = "nodejs";
 
-type StaffRole = "admin" | "sub_admin" | "patient_attender" | "super_admin" | "doctor" | "staff" | "accounts" | "reception" | "viewer";
+type StaffRole = "admin" | "sub_admin" | "patient_attender" | "super_admin";
 const STAFF_ROLES: StaffRole[] = ["admin", "sub_admin", "patient_attender", "super_admin"];
 const CREATABLE_ROLES: StaffRole[] = ["admin", "sub_admin", "patient_attender"];
 
@@ -163,27 +163,6 @@ export async function PATCH(request: NextRequest) {
     await requireStaffManager(request);
     const body = await request.json();
     const uid = String(body.uid || "").trim();
-
-    // Patient assignment is intentionally handled here as well as account status
-    // so the Doctors & Staff screen has one reliable staff-management endpoint.
-    if (Array.isArray(body.assignedPatientIds)) {
-      if (!uid) return validationError("Staff UID is required.");
-      const staffRef = adminDb.collection("users").doc(uid);
-      const staffDoc = await staffRef.get();
-      if (!staffDoc.exists) return errorResponse({ category: "firestore", status: 404, code: "staff_not_found", message: "Staff account not found." });
-
-      const ids = [...new Set(body.assignedPatientIds.map((id: unknown) => String(id).trim()).filter(Boolean))];
-      const checks = await Promise.all(ids.map((id) => adminDb.collection("patients").doc(id).get()));
-      const validIds = checks.filter((p) => p.exists && p.data()?.isDeleted !== true).map((p) => p.id);
-      await staffRef.update({ assignedPatientIds: validIds, updatedAt: new Date() });
-
-      return NextResponse.json({
-        success: true,
-        assignedPatientIds: validIds,
-        message: "Patient assignments updated.",
-      });
-    }
-
     const active = Boolean(body.active);
     if (!uid) return validationError("Staff UID is required.");
     const staffRef = adminDb.collection("users").doc(uid);
