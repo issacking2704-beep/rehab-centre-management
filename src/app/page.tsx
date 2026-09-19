@@ -16,7 +16,7 @@ const modules = [
   { name: "Doctors & Staff", icon: "👨‍⚕️", href: "/staff", permission: "staff" },
   { name: "Attendance", icon: "🕥", href: "/attendance", permission: "attendance" },
   { name: "Vitals", icon: "❤️", href: "/vitals", permission: "vitals" },
-  { name: "Payments & Bills", icon: "💰", href: "/billing", permission: "billing" },
+  { name: "Payments & Bills", icon: "💰", href: "/bills", permission: "billing" },
   { name: "Invoice Generator", icon: "🧾", href: "/invoices", permission: "invoices" },
   { name: "Letterhead Maker", icon: "📜", href: "/letterhead", permission: "letterhead" },
   { name: "Reports", icon: "📊", href: "/reports", permission: "reports" },
