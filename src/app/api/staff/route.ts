@@ -8,7 +8,7 @@ import {
 
 export const runtime = "nodejs";
 
-type StaffRole = "admin" | "sub_admin" | "patient_attender" | "super_admin";
+type StaffRole = "admin" | "sub_admin" | "patient_attender" | "super_admin" | "doctor" | "staff" | "accounts" | "reception" | "viewer";
 const STAFF_ROLES: StaffRole[] = ["admin", "sub_admin", "patient_attender", "super_admin"];
 const CREATABLE_ROLES: StaffRole[] = ["admin", "sub_admin", "patient_attender"];
 
