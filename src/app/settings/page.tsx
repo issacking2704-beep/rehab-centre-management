@@ -75,6 +75,7 @@ export default function SettingsPage() {
       JSON.stringify(settings)
     );
 
+    window.dispatchEvent(new Event("rehab-branding-updated"));
     setSaved(true);
 
     setTimeout(() => {
@@ -95,6 +96,7 @@ export default function SettingsPage() {
       "rehabCentreSettings",
       JSON.stringify(defaultSettings)
     );
+    window.dispatchEvent(new Event("rehab-branding-updated"));
   }
 
   function handleLogo(
