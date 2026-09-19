@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { collection, deleteDoc, doc, getDocs, addDoc, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type Patient = {
   id: string;
@@ -64,20 +66,17 @@ export default function VitalsPage() {
   /* ================= LOAD DATA ================= */
 
   useEffect(() => {
-    try {
-      const savedPatients = localStorage.getItem(PATIENT_KEY);
-      const savedVitals = localStorage.getItem(VITALS_KEY);
-
-      if (savedPatients) {
-        setPatients(JSON.parse(savedPatients));
-      }
-
-      if (savedVitals) {
-        setRecords(JSON.parse(savedVitals));
-      }
-    } catch (error) {
-      console.error("Unable to load vitals data", error);
+    async function loadData() {
+      try {
+        const [patientSnap, vitalsSnap] = await Promise.all([
+          getDocs(collection(db, "patients")),
+          getDocs(collection(db, "vitals")),
+        ]);
+        setPatients(patientSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Patient)));
+        setRecords(vitalsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as VitalRecord)));
+      } catch (error) { console.error("Unable to load vitals data", error); }
     }
+    void loadData();
 
     const now = new Date();
 
@@ -239,7 +238,7 @@ export default function VitalsPage() {
 
   /* ================= SAVE VITALS ================= */
 
-  function saveVitals() {
+  async function saveVitals() {
     if (!form.patientId) {
       alert("Please select a patient.");
       return;
@@ -260,8 +259,7 @@ export default function VitalsPage() {
     }
 
     if (editingId) {
-      setRecords((current) =>
-        current.map((record) =>
+      await updateDoc(doc(db, "vitals", editingId), {
           record.id === editingId
             ? {
                 ...record,
@@ -301,23 +299,23 @@ export default function VitalsPage() {
       notes: form.notes,
     };
 
-    setRecords((current) => [newRecord, ...current]);
+    const created = await addDoc(collection(db, "vitals"), { ...newRecord, createdAt: new Date().toISOString() });
+    setRecords((current) => [{ ...newRecord, id: created.id }, ...current]);
 
     closeForm();
   }
 
   /* ================= DELETE ================= */
 
-  function deleteVitals(record: VitalRecord) {
+  async function deleteVitals(record: VitalRecord) {
     const confirmed = window.confirm(
       `Delete the vitals record for ${record.patientName}?`
     );
 
     if (!confirmed) return;
 
-    setRecords((current) =>
-      current.filter((item) => item.id !== record.id)
-    );
+    await deleteDoc(doc(db, "vitals", record.id));
+    setRecords((current) => current.filter((item) => item.id !== record.id));
 
     setSelectedRecord(null);
   }
