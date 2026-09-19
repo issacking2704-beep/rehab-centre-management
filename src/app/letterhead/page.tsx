@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function LetterheadPage() {
   const [centreName, setCentreName] = useState(
@@ -48,6 +48,27 @@ export default function LetterheadPage() {
   );
 
   const [logo, setLogo] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("rehabCentreSettings");
+      if (!stored) return;
+      const branding = JSON.parse(stored);
+      if (branding.centreName) setCentreName(branding.centreName);
+      if (branding.tagline) setTagline(branding.tagline);
+      if (branding.address) setAddress(branding.address);
+      if (branding.phone) setPhone(branding.phone);
+      if (branding.email) setEmail(branding.email);
+      if (branding.website) setWebsite(branding.website);
+      if (branding.doctorName) setDoctorName(branding.doctorName);
+      if (branding.qualification) setQualification(branding.qualification);
+      if (branding.registrationNo) setRegistrationNo(branding.registrationNo);
+      if (branding.logo) setLogo(branding.logo);
+    } catch {
+      // Keep letterhead defaults if saved branding cannot be read.
+    }
+  }, []);
 
   function handleLogo(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
