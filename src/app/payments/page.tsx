@@ -5,7 +5,7 @@ import { collection, deleteDoc, doc, getDocs, addDoc, orderBy, query } from "fir
 import { db } from "@/lib/firebase";
 
 type Bill = {
-  id: number;
+  id: string;
   billNo: string;
   patientName: string;
   patientId: string;
