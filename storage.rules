@@ -16,6 +16,12 @@ service firebase.storage {
       return role() in ['super_admin', 'admin', 'doctor', 'staff', 'accounts', 'reception'];
     }
 
+    match /branding/{fileName} {
+      allow read: if signedIn();
+      allow write: if isAdmin() && request.resource.size < 2 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
     match /patient-files/{patientId}/{fileName} {
       allow read: if signedIn();
       allow write: if canUpload()
