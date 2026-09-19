@@ -25,9 +25,6 @@ type AttendanceRecord = {
   notes: string;
 };
 
-const STAFF_KEY = "rehab-centre-staff";
-const ATTENDANCE_KEY = "rehab-centre-attendance";
-
 const emptyForm = {
   staffId: "",
   date: "",
@@ -101,16 +98,7 @@ export default function AttendancePage() {
     setLoaded(true);
   }, []);
 
-  /* ================= SAVE ================= */
-
-  useEffect(() => {
-    if (!loaded) return;
-
-    localStorage.setItem(
-      ATTENDANCE_KEY,
-      JSON.stringify(records)
-    );
-  }, [records, loaded]);
+  /* Attendance is persisted directly to Firestore. */
 
   /* ================= FILTER ================= */
 
