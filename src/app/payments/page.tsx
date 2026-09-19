@@ -180,7 +180,7 @@ export default function PaymentsPage() {
     setShowForm(false);
   }
 
-  async function deleteBill(id: number) {
+  async function deleteBill(id: string) {
     const confirmed = window.confirm(
       "Delete this bill?"
     );
