@@ -238,7 +238,7 @@ export default function PatientFilesPage() {
     setShowUploadForm(true);
   }
 
-  function handleFileSelection(
+  async function handleFileSelection(
     event: ChangeEvent<HTMLInputElement>
   ) {
     if (!selectedPatient) {
