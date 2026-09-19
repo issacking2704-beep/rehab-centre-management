@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { collection, deleteDoc, doc, getDocs, addDoc, orderBy, query } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type Bill = {
   id: number;
@@ -15,24 +17,23 @@ type Bill = {
   status: "Paid" | "Partial" | "Pending";
 };
 
-const initialBills: Bill[] = [
-  {
-    id: 1,
-    billNo: "BILL-001",
-    patientName: "Demo Patient",
-    patientId: "RC-001",
-    service: "Rehabilitation Session",
-    amount: 2500,
-    paid: 2500,
-    paymentMethod: "UPI",
-    date: new Date().toISOString().split("T")[0],
-    status: "Paid",
-  },
-];
+const initialBills: Bill[] = [];
 
 export default function PaymentsPage() {
   const [bills, setBills] =
     useState<Bill[]>(initialBills);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadBills() {
+      try {
+        const snapshot = await getDocs(query(collection(db, "payments"), orderBy("createdAt", "desc")));
+        setBills(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Bill)));
+      } catch (error) { console.error("Failed to load bills", error); }
+      finally { setLoading(false); }
+    }
+    loadBills();
+  }, []);
 
   const [search, setSearch] = useState("");
 
@@ -119,7 +120,7 @@ export default function PaymentsPage() {
     return "Pending";
   }
 
-  function addBill() {
+  async function addBill() {
     const billAmount =
       Number(amount) || 0;
 
@@ -149,7 +150,7 @@ export default function PaymentsPage() {
     }
 
     const newBill: Bill = {
-      id: Date.now(),
+      id: "",
       billNo: `BILL-${String(
         bills.length + 1
       ).padStart(3, "0")}`,
@@ -166,10 +167,8 @@ export default function PaymentsPage() {
       ),
     };
 
-    setBills((current) => [
-      newBill,
-      ...current,
-    ]);
+    const created = await addDoc(collection(db, "payments"), { ...newBill, createdAt: new Date().toISOString() });
+    setBills((current) => [{ ...newBill, id: created.id }, ...current]);
 
     setPatientName("");
     setPatientId("");
@@ -181,25 +180,25 @@ export default function PaymentsPage() {
     setShowForm(false);
   }
 
-  function deleteBill(id: number) {
+  async function deleteBill(id: number) {
     const confirmed = window.confirm(
       "Delete this bill?"
     );
 
     if (!confirmed) return;
 
-    setBills((current) =>
-      current.filter((bill) => bill.id !== id)
-    );
+    await deleteDoc(doc(db, "payments", String(id)));
+    setBills((current) => current.filter((bill) => bill.id !== id));
   }
 
-  function clearAllBills() {
+  async function clearAllBills() {
     const confirmed = window.confirm(
       "Delete all bills from this screen?"
     );
 
     if (!confirmed) return;
 
+    await Promise.all(bills.map((bill) => deleteDoc(doc(db, "payments", String(bill.id)))));
     setBills([]);
   }
 
@@ -235,6 +234,7 @@ export default function PaymentsPage() {
       </header>
 
       <div className="space-y-6 p-6">
+        {loading && <div className="rounded-xl bg-blue-50 p-3 text-sm text-blue-700">Loading bills…</div>}
         {/* SUMMARY */}
 
         <div className="grid gap-4 md:grid-cols-3">
