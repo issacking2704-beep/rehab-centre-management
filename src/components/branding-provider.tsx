@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export type BrandingSettings = {
   centreName: string;
@@ -41,20 +43,25 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<BrandingSettings>(defaultBranding);
 
   useEffect(() => {
-    const load = () => {
+    const load = async () => {
       try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          setSettings({ ...defaultBranding, ...JSON.parse(stored) });
+        const snap = await getDoc(doc(db, "settings", "branding"));
+        if (snap.exists()) setSettings({ ...defaultBranding, ...snap.data() } as BrandingSettings);
+        else {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) setSettings({ ...defaultBranding, ...JSON.parse(stored) });
         }
       } catch {
-        // Keep safe defaults when stored branding is invalid.
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) setSettings({ ...defaultBranding, ...JSON.parse(stored) });
+        } catch { /* keep defaults */ }
       }
     };
-
-    load();
-    window.addEventListener("rehab-branding-updated", load);
-    return () => window.removeEventListener("rehab-branding-updated", load);
+    void load();
+    const refresh = () => void load();
+    window.addEventListener("rehab-branding-updated", refresh);
+    return () => window.removeEventListener("rehab-branding-updated", refresh);
   }, []);
 
   useEffect(() => {
