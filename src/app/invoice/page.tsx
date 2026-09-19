@@ -76,6 +76,25 @@ export default function InvoicePage() {
   const [items, setItems] =
     useState<InvoiceItem[]>(initialItems);
 
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("rehabCentreSettings");
+      if (!stored) return;
+      const branding = JSON.parse(stored);
+      if (branding.centreName) setCentreName(branding.centreName);
+      if (branding.tagline) setTagline(branding.tagline);
+      if (branding.address) setAddress(branding.address);
+      if (branding.phone) setPhone(branding.phone);
+      if (branding.email) setEmail(branding.email);
+      if (branding.website) setWebsite(branding.website);
+      if (branding.doctorName) setSignatureName(branding.doctorName);
+      if (branding.logo) setLogo(branding.logo);
+    } catch {
+      // Keep invoice defaults if saved branding cannot be read.
+    }
+  }, []);
+
   /* ================= PATIENT PROFILE INTEGRATION ================= */
 
   useEffect(() => {
