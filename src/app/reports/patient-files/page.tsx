@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import { collection, deleteDoc, doc, getDocs, addDoc, updateDoc } from "firebase/firestore";
+import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 
 type Patient = {
   id: string;
@@ -105,52 +108,22 @@ export default function PatientFilesPage() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const savedPatients = localStorage.getItem(PATIENTS_KEY);
-      const savedFiles = localStorage.getItem(FILES_KEY);
-      const savedFolders = localStorage.getItem(
-        "rehab-centre-patient-folders"
-      );
-
-      if (savedPatients) {
-        const parsed = JSON.parse(savedPatients);
-
-        if (Array.isArray(parsed)) {
-          setPatients(parsed);
-        }
+    async function loadData() {
+      try {
+        const [patientsSnap, filesSnap] = await Promise.all([
+          getDocs(collection(db, "patients")),
+          getDocs(collection(db, "patientFiles")),
+        ]);
+        setPatients(patientsSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Patient)));
+        setFiles(filesSnap.docs.map((d) => ({ id: d.id, ...d.data() } as PatientFile)));
+      } catch (error) {
+        console.error("Unable to load patient files data", error);
+      } finally {
+        setLoaded(true);
       }
-
-      if (savedFiles) {
-        const parsed = JSON.parse(savedFiles);
-
-        if (Array.isArray(parsed)) {
-          setFiles(parsed);
-        }
-      }
-
-      if (savedFolders) {
-        const parsed = JSON.parse(savedFolders);
-
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setFolders(parsed);
-        }
-      }
-    } catch (error) {
-      console.error("Unable to load patient files data", error);
     }
-
-    setLoaded(true);
+    void loadData();
   }, []);
-
-  useEffect(() => {
-    if (!loaded) return;
-
-    localStorage.setItem(FILES_KEY, JSON.stringify(files));
-    localStorage.setItem(
-      "rehab-centre-patient-folders",
-      JSON.stringify(folders)
-    );
-  }, [files, folders, loaded]);
 
   const selectedPatient = patients.find(
     (patient) => patient.id === selectedPatientId
@@ -294,7 +267,34 @@ export default function PatientFilesPage() {
       category: uploadCategory,
     }));
 
-    setFiles((current) => [...newFiles, ...current]);
+    try {
+      for (const file of Array.from(selectedFiles)) {
+        const fileId = crypto.randomUUID();
+        const storagePath = `patient-files/${selectedPatient.id}/${fileId}-${file.name}`;
+        const storageRef = ref(storage, storagePath);
+        await uploadBytes(storageRef, file, { contentType: file.type || "application/octet-stream" });
+        const downloadUrl = await getDownloadURL(storageRef);
+        await addDoc(collection(db, "patientFiles"), {
+          patientId: selectedPatient.id,
+          patientName: selectedPatient.name,
+          folder: uploadFolder,
+          fileName: file.name,
+          fileType: file.type || "application/octet-stream",
+          size: file.size,
+          uploadedAt: new Date().toISOString(),
+          description: uploadDescription.trim(),
+          category: uploadCategory,
+          storagePath,
+          downloadUrl,
+        });
+      }
+      const refreshed = await getDocs(collection(db, "patientFiles"));
+      setFiles(refreshed.docs.map((d) => ({ id: d.id, ...d.data() } as PatientFile)));
+    } catch (error) {
+      console.error("Document upload failed", error);
+      alert("Upload failed. Please check your permissions and try again.");
+      return;
+    }
 
     setShowUploadForm(false);
     setUploadDescription("");
@@ -330,16 +330,9 @@ export default function PatientFilesPage() {
       return;
     }
 
-    setFiles((current) =>
-      current.map((file) =>
-        file.id === editingFile.id
-          ? {
-              ...file,
-              fileName: name,
-            }
-          : file
-      )
-    );
+    void updateDoc(doc(db, "patientFiles", editingFile.id), { fileName: name }).then(() => {
+      setFiles((current) => current.map((file) => file.id === editingFile.id ? { ...file, fileName: name } : file));
+    }).catch((error) => console.error("Unable to rename document", error));
 
     setEditingFile(null);
     setRenameValue("");
@@ -354,9 +347,18 @@ export default function PatientFilesPage() {
       return;
     }
 
-    setFiles((current) =>
-      current.filter((item) => item.id !== file.id)
-    );
+    void (async () => {
+      try {
+        await deleteDoc(doc(db, "patientFiles", file.id));
+        if ((file as PatientFile & { storagePath?: string }).storagePath) {
+          await deleteObject(ref(storage, (file as PatientFile & { storagePath?: string }).storagePath!));
+        }
+        setFiles((current) => current.filter((item) => item.id !== file.id));
+      } catch (error) {
+        console.error("Unable to delete document", error);
+        alert("Unable to delete this document.");
+      }
+    })();
   }
 
   return (
@@ -806,9 +808,7 @@ export default function PatientFilesPage() {
                 />
 
                 <p className="mt-2 text-xs text-slate-400">
-                  Current version records document metadata.
-                  Connect secure file storage before storing
-                  actual medical documents.
+                  Documents are securely uploaded to Firebase Storage and indexed in Firestore.
                 </p>
               </div>
             </div>
