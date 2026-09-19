@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { useBranding } from "@/components/branding-provider";
 
 type Mode = "staff" | "attender";
 
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const branding = useBranding();
 
   async function handleStaffLogin() {
     if (!email.trim() || !password) {
@@ -84,9 +86,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="rounded-3xl bg-white p-8 shadow-xl">
           <div className="text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 text-3xl">🏥</div>
-            <h1 className="mt-5 text-2xl font-bold text-slate-900">Rehab Centre</h1>
-            <p className="mt-1 text-sm text-slate-500">Management System</p>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-3xl">{branding.logo ? <img src={branding.logo} alt="" className="h-full w-full object-contain p-2" /> : "🏥"}</div>
+            <h1 className="mt-5 text-2xl font-bold text-slate-900">{branding.centreName}</h1>
+            <p className="mt-1 text-sm text-slate-500">{branding.tagline}</p>
           </div>
 
           <div className="mt-7 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
