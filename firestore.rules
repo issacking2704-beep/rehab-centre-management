@@ -96,6 +96,12 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if signedIn();
+      allow update, delete: if isSuperAdmin();
+    }
+
     match /patientAttenderPasskeys/{passkeyId} {
       allow read, write: if false;
     }
