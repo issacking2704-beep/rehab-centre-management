@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 type InvoiceItem = {
@@ -73,26 +73,30 @@ export default function InvoicePage() {
 
   const [logo, setLogo] = useState<string | null>(null);
 
-  const [items, setItems] =
-    useState<InvoiceItem[]>(initialItems);
+  const [items, setItems] = useState<InvoiceItem[]>(initialItems);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
 
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("rehabCentreSettings");
-      if (!stored) return;
-      const branding = JSON.parse(stored);
-      if (branding.centreName) setCentreName(branding.centreName);
-      if (branding.tagline) setTagline(branding.tagline);
-      if (branding.address) setAddress(branding.address);
-      if (branding.phone) setPhone(branding.phone);
-      if (branding.email) setEmail(branding.email);
-      if (branding.website) setWebsite(branding.website);
-      if (branding.doctorName) setSignatureName(branding.doctorName);
-      if (branding.logo) setLogo(branding.logo);
-    } catch {
-      // Keep invoice defaults if saved branding cannot be read.
+    async function loadBranding() {
+      try {
+        const snapshot = await getDoc(doc(db, "settings", "branding"));
+        if (!snapshot.exists()) return;
+        const branding = snapshot.data();
+        if (branding.centreName) setCentreName(String(branding.centreName));
+        if (branding.tagline) setTagline(String(branding.tagline));
+        if (branding.address) setAddress(String(branding.address));
+        if (branding.phone) setPhone(String(branding.phone));
+        if (branding.email) setEmail(String(branding.email));
+        if (branding.website) setWebsite(String(branding.website));
+        if (branding.doctorName) setSignatureName(String(branding.doctorName));
+        if (branding.logo) setLogo(String(branding.logo));
+      } catch (error) {
+        console.error("Error loading invoice branding:", error);
+      }
     }
+    loadBranding();
   }, []);
 
   /* ================= PATIENT PROFILE INTEGRATION ================= */
@@ -255,6 +259,42 @@ export default function InvoicePage() {
     reader.readAsDataURL(file);
   }
 
+  async function saveInvoice() {
+    try {
+      setSaving(true);
+      setSaveMessage("");
+      const ref = await addDoc(collection(db, "invoices"), {
+        invoiceNo,
+        invoiceDate,
+        dueDate,
+        patientId,
+        patientName,
+        patientPhone,
+        patientAddress,
+        paymentMethod,
+        amountPaid: paid,
+        subtotal,
+        discountTotal,
+        grandTotal,
+        balance,
+        items,
+        notes,
+        terms,
+        signatureName,
+        createdAt: serverTimestamp(),
+      });
+      setSaveMessage(`Invoice ${invoiceNo} saved successfully.`);
+      if (ref.id) {
+        setTimeout(() => setSaveMessage(""), 5000);
+      }
+    } catch (error) {
+      console.error("Error saving invoice:", error);
+      setSaveMessage("Unable to save invoice. Check your account permissions.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function printInvoice() {
     window.print();
   }
@@ -276,13 +316,23 @@ export default function InvoicePage() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={printInvoice}
-            className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
-          >
-            🖨️ Print / Save PDF
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={saveInvoice}
+              disabled={saving}
+              className="rounded-xl bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "💾 Save Invoice"}
+            </button>
+            <button
+              type="button"
+              onClick={printInvoice}
+              className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700"
+            >
+              🖨️ Print / Save PDF
+            </button>
+          </div>
         </div>
       </header>
 
