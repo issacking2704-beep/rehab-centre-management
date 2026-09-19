@@ -12,7 +12,7 @@ service firebase.storage {
         : null;
     }
 
-    function canUpload() {
+    function isAdmin() {\n      return role() in ['super_admin', 'admin'];\n    }\n\n    function canUpload() {
       return role() in ['super_admin', 'admin', 'doctor', 'staff', 'accounts', 'reception'];
     }
 
