@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, limit, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 type AuditLog = {
@@ -12,14 +12,13 @@ type AuditLog = {
   description?: string;
   userName?: string;
   role?: string;
-  createdAt?: { toDate?: () => Date } | string | null;
+  createdAt?: Timestamp | null;
 };
 
-function formatDate(value: AuditLog["createdAt"]) {
-  if (!value) return "—";
-  if (typeof value === "string") return new Date(value).toLocaleString("en-IN");
-  if (typeof value === "object" && value.toDate) return value.toDate().toLocaleString("en-IN");
-  return "—";
+function formatDate(value?: Timestamp | null) {
+  if (!value) return "Pending…";
+  const date = value.toDate();
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("en-IN");
 }
 
 export default function AuditPage() {
@@ -28,31 +27,53 @@ export default function AuditPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let active = true;
+
     async function load() {
       try {
         const snapshot = await getDocs(
           query(collection(db, "auditLogs"), orderBy("createdAt", "desc"), limit(500))
         );
-        setLogs(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as AuditLog)));
-      } catch (err) {
-        console.error("Failed to load audit logs:", err);
-        setError("Unable to load audit logs. Check your account permissions and Firestore rules.");
+        if (!active) return;
+        setLogs(
+          snapshot.docs.map((item) => {
+            const data = item.data();
+            return {
+              id: item.id,
+              action: typeof data.action === "string" ? data.action : undefined,
+              module: typeof data.module === "string" ? data.module : undefined,
+              recordId: typeof data.recordId === "string" ? data.recordId : undefined,
+              description: typeof data.description === "string" ? data.description : undefined,
+              userName: typeof data.userName === "string" ? data.userName : undefined,
+              role: typeof data.role === "string" ? data.role : undefined,
+              createdAt: data.createdAt instanceof Timestamp ? data.createdAt : null,
+            };
+          })
+        );
+      } catch (loadError) {
+        console.error("Failed to load audit logs:", loadError);
+        if (active) setError("Unable to load audit logs. Check your account permissions and Firestore rules.");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
-    load();
+
+    void load();
+    return () => { active = false; };
   }, []);
 
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-900 sm:p-8">
       <div className="mx-auto max-w-7xl">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold">Audit Log</h1>
+          <a href="/" className="text-sm font-semibold text-blue-600">← Dashboard</a>
+          <h1 className="mt-2 text-2xl font-bold">Audit Log</h1>
           <p className="mt-1 text-sm text-slate-500">Administrative record of important actions in the system.</p>
         </div>
+
         {loading && <div className="rounded-2xl bg-white p-6 shadow-sm">Loading audit logs…</div>}
         {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+
         {!loading && !error && (
           <div className="overflow-hidden rounded-2xl bg-white shadow-sm">
             <div className="overflow-x-auto">
