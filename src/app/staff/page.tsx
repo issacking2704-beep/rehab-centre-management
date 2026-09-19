@@ -4,7 +4,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
-type Role = "admin" | "sub_admin" | "patient_attender" | "super_admin" | "doctor" | "staff" | "accounts" | "reception" | "viewer";
+type Role = "admin" | "sub_admin" | "patient_attender" | "super_admin";
 type Staff = { uid: string; name: string; email: string; role: Role | string; phone: string; active: boolean; assignedPatientIds?: string[]; passkeyLast4?: string; passkeyCreatedAt?: string };
 type Patient = { id: string; name: string; room?: string; diagnosis?: string };
 
