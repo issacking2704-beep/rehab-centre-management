@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useBranding } from "@/components/branding-provider";
 
 type Patient = {
   id: string;
@@ -51,6 +52,7 @@ export default function PatientAttenderPortal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState("");
+  const branding = useBranding();
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (currentUser) => {
@@ -103,9 +105,10 @@ export default function PatientAttenderPortal() {
       <header className="border-b bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-2xl">🏥</div>
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-2xl">{branding.logo ? <img src={branding.logo} alt="" className="h-full w-full object-contain p-1" /> : "🏥"}</div>
             <div>
-              <h1 className="text-xl font-bold">Patient Attender Portal</h1>
+              <h1 className="text-xl font-bold">{branding.centreName}</h1>
+              <p className="text-xs text-slate-400">{branding.tagline}</p>
               <p className="text-sm text-slate-500">{user?.displayName || "Assigned care view"}</p>
             </div>
           </div>
