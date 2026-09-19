@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes, deleteObject } from "firebase/storage";
+import { db, storage } from "@/lib/firebase";
 
 type BrandingSettings = {
   centreName: string;
@@ -41,20 +44,13 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(
-        "rehabCentreSettings"
-      );
-
-      if (stored) {
-        setSettings({
-          ...defaultSettings,
-          ...JSON.parse(stored),
-        });
-      }
-    } catch {
-      console.log("Unable to load saved settings.");
+    async function loadSettings() {
+      try {
+        const snap = await getDoc(doc(db, "settings", "branding"));
+        if (snap.exists()) setSettings({ ...defaultSettings, ...snap.data() } as BrandingSettings);
+      } catch (error) { console.error("Unable to load branding settings", error); }
     }
+    void loadSettings();
   }, []);
 
   function updateSetting(
@@ -69,21 +65,21 @@ export default function SettingsPage() {
     setSaved(false);
   }
 
-  function saveSettings() {
-    localStorage.setItem(
-      "rehabCentreSettings",
-      JSON.stringify(settings)
-    );
+  async function saveSettings() {
+    try {
+      await setDoc(doc(db, "settings", "branding"), settings, { merge: true });
+      localStorage.setItem("rehabCentreSettings", JSON.stringify(settings));
+      window.dispatchEvent(new Event("rehab-branding-updated"));
+      setSaved(true);
 
-    window.dispatchEvent(new Event("rehab-branding-updated"));
-    setSaved(true);
-
-    setTimeout(() => {
-      setSaved(false);
-    }, 3000);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (error) {
+      console.error("Unable to save branding settings", error);
+      alert("Unable to save settings. Check your account permissions.");
+    }
   }
 
-  function resetSettings() {
+  async function resetSettings() {
     const confirmed = window.confirm(
       "Reset all branding settings to the default values?"
     );
@@ -92,16 +88,12 @@ export default function SettingsPage() {
 
     setSettings(defaultSettings);
 
-    localStorage.setItem(
-      "rehabCentreSettings",
-      JSON.stringify(defaultSettings)
-    );
+    await setDoc(doc(db, "settings", "branding"), defaultSettings);
+    localStorage.setItem("rehabCentreSettings", JSON.stringify(defaultSettings));
     window.dispatchEvent(new Event("rehab-branding-updated"));
   }
 
-  function handleLogo(
-    event: React.ChangeEvent<HTMLInputElement>
-  ) {
+  async function handleLogo(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     if (!file) return;
@@ -111,17 +103,24 @@ export default function SettingsPage() {
       return;
     }
 
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      updateSetting("logo", reader.result as string);
-    };
-
-    reader.readAsDataURL(file);
+    try {
+      const path = `branding/logo-${Date.now()}-${file.name}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, file, { contentType: file.type });
+      const url = await getDownloadURL(storageRef);
+      updateSetting("logo", url);
+    } catch (error) {
+      console.error("Logo upload failed", error);
+      alert("Unable to upload logo.");
+    }
   }
 
-  function removeLogo() {
+  async function removeLogo() {
+    const previous = settings.logo;
     updateSetting("logo", null);
+    if (previous?.includes("/o/")) {
+      try { await deleteObject(ref(storage, decodeURIComponent(previous.split("/o/")[1].split("?")[0]))); } catch { /* file may already be absent */ }
+    }
   }
 
   return (
@@ -515,7 +514,7 @@ export default function SettingsPage() {
               </p>
 
               <p className="mt-1 text-xs text-green-600">
-                Save the settings to store them on this device.
+                Save the settings to store them centrally for authorised users.
               </p>
             </div>
           </div>
