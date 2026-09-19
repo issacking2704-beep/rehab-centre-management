@@ -3,6 +3,10 @@
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
+  --brand-primary: #2563eb;
+  --brand-secondary: #0f172a;
+  --brand-primary-soft: rgba(37, 99, 235, 0.10);
+  --brand-primary-border: rgba(37, 99, 235, 0.25);
 }
 
 @theme inline {
@@ -44,12 +48,54 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid rgb(59 130 246 / 30%);
+  outline: 3px solid var(--brand-primary-border);
   outline-offset: 2px;
 }
 
+/* Settings > Branding is the single source of truth for the site's accent. */
+[class~="bg-blue-600"] {
+  background-color: var(--brand-primary) !important;
+}
+[class~="hover:bg-blue-700"]:hover {
+  background-color: var(--brand-primary) !important;
+}
+[class~="text-blue-600"],
+[class~="text-blue-700"] {
+  color: var(--brand-primary) !important;
+}
+[class~="text-blue-800"] {
+  color: var(--brand-secondary) !important;
+}
+[class~="border-blue-100"],
+[class~="border-blue-200"],
+[class~="border-blue-300"] {
+  border-color: var(--brand-primary-border) !important;
+}
+[class~="bg-blue-50"],
+[class~="bg-blue-100"] {
+  background-color: var(--brand-primary-soft) !important;
+}
+[class~="text-blue-100"] {
+  color: color-mix(in srgb, var(--brand-primary) 25%, white) !important;
+}
+[class~="focus:border-blue-500"]:focus {
+  border-color: var(--brand-primary) !important;
+}
+[class~="focus:ring-blue-100"]:focus {
+  --tw-ring-color: var(--brand-primary-border) !important;
+}
+[class~="bg-slate-950"] {
+  background-color: var(--brand-secondary) !important;
+}
+[class~="border-slate-800"] {
+  border-color: color-mix(in srgb, var(--brand-secondary) 80%, white) !important;
+}
+[class~="text-slate-900"] {
+  color: var(--brand-secondary) !important;
+}
+
 ::selection {
-  background: rgb(37 99 235 / 18%);
+  background: var(--brand-primary-border);
 }
 
 @media (max-width: 640px) {
