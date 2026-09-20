@@ -8,6 +8,8 @@ import {
 } from "@/lib/patient-attender";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 function errorResponse(message: string, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status });
@@ -107,9 +109,21 @@ export async function PATCH(request: NextRequest) {
 
     const cleanIds = uniquePatientIds.filter((id: string) => validPatientIds.has(id));
     await staffRef.update({ assignedPatientIds: cleanIds, updatedAt: new Date() });
-    await recordServerAudit({ action: "update", module: "patient-attenders", recordId: uid, description: "Updated Patient Attender patient assignments.", userId: manager.uid, role: manager.role, metadata: { assignedCount: cleanIds.length } });
 
-    return NextResponse.json({ success: true, assignedPatientIds: cleanIds, message: "Patient assignments updated." });
+    // Read the document back immediately so the UI only reports success when
+    // Firestore actually persisted the assignment list.
+    const verifySnapshot = await staffRef.get();
+    const savedIds = Array.isArray(verifySnapshot.data()?.assignedPatientIds)
+      ? verifySnapshot.data()?.assignedPatientIds.map((id: unknown) => String(id))
+      : [];
+    const sameIds = savedIds.length === cleanIds.length && cleanIds.every((id) => savedIds.includes(id));
+    if (!sameIds) {
+      return errorResponse("Assignments could not be verified after saving. Please retry.", 500);
+    }
+
+    await recordServerAudit({ action: "update", module: "patient-attenders", recordId: uid, description: "Updated Patient Attender patient assignments.", userId: manager.uid, role: manager.role, metadata: { assignedCount: savedIds.length } });
+
+    return NextResponse.json({ success: true, assignedPatientIds: savedIds, assignedCount: savedIds.length, message: "Patient assignments updated." });
   } catch (error: any) {
     console.error("PATCH /api/patient-attenders:", error);
     const message = error?.message || "Failed to update assignments.";
