@@ -109,7 +109,7 @@ export default function Home() {
         </button>
       </aside>
 
-      <section className={`lg:ml-64 transition-all duration-200 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
+      <section className={`transition-all duration-200 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
         <header className="flex min-h-20 items-center justify-between border-b bg-white px-6 py-4 shadow-sm"><div><h2 className="text-xl font-bold">Dashboard</h2><p className="text-xs text-slate-500">{branding.tagline}</p></div><div className="flex items-center gap-3"><div className="hidden text-right sm:block"><p className="text-sm font-semibold">{profile.name || "User"}</p><p className="text-xs text-slate-500">{displayRole}</p></div><div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">{(profile.name || "U").charAt(0).toUpperCase()}</div><button type="button" onClick={handleLogout} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50">Logout</button></div></header>
         <div className="p-6 sm:p-8">
           <div className="mb-8 rounded-2xl bg-blue-600 p-6 text-white shadow-lg"><p className="text-sm text-blue-100">Welcome back</p><h3 className="mt-1 text-2xl font-bold">{profile.name || "User"}</h3><p className="mt-2 text-sm text-blue-100">You are signed in as <strong>{displayRole}</strong>.</p></div>
