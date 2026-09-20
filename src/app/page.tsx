@@ -94,7 +94,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
       <aside className="fixed left-0 top-0 hidden h-screen w-64 bg-slate-950 text-white lg:block">
-        <div className="flex h-20 items-center border-b border-slate-800 px-6"><div className="mr-3 flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-xl">{branding.logo ? <img src={branding.logo} alt="" className="h-full w-full object-cover p-0" /> : "🏥"}</div><div><h1 className="font-bold">{branding.centreName}</h1><p className="text-xs text-slate-400">{branding.tagline}</p></div></div>
+        <div className="flex h-20 items-center border-b border-slate-800 px-6"><div className="mr-3 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-xl">{branding.logo ? <img src={branding.logo} alt="" className="max-h-full max-w-full object-contain p-0" /> : "🏥"}</div><div><h1 className="font-bold">{branding.centreName}</h1><p className="text-xs text-slate-400">{branding.tagline}</p></div></div>
         <nav className="p-4">{visibleModules.map((module) => <Link key={module.name} href={module.href} className="mb-1 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-slate-300 transition hover:bg-slate-800 hover:text-white"><span className="w-6 text-lg">{module.icon}</span><span className="text-sm font-medium">{module.name}</span></Link>)}</nav>
       </aside>
 
