@@ -31,8 +31,11 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Install Playwright
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright test runner
+        run: npm install --no-audit --no-fund --no-save @playwright/test@1.63.0
+
+      - name: Install Playwright browsers
+        run: npx --no-install playwright install --with-deps chromium
 
       - name: Run QA smoke suite
         if: env.QA_BASE_URL != ''
