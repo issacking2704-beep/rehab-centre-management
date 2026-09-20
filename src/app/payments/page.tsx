@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, deleteDoc, doc, getDocs, addDoc, orderBy, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { recordAudit } from "@/lib/audit";
 
 type Bill = {
   id: string;
@@ -169,6 +170,7 @@ export default function PaymentsPage() {
 
     const created = await addDoc(collection(db, "payments"), { ...newBill, createdAt: new Date().toISOString() });
     setBills((current) => [{ ...newBill, id: created.id }, ...current]);
+    void recordAudit({ action: "create", module: "payments", recordId: created.id, description: `Created bill ${newBill.billNo} for ${newBill.patientName}.`, metadata: { amount: billAmount, paid: paidAmount, method: paymentMethod } });
 
     setPatientName("");
     setPatientId("");
@@ -189,6 +191,7 @@ export default function PaymentsPage() {
 
     await deleteDoc(doc(db, "payments", String(id)));
     setBills((current) => current.filter((bill) => bill.id !== id));
+    void recordAudit({ action: "delete", module: "payments", recordId: id, description: `Deleted payment/bill ${id}.` });
   }
 
   async function clearAllBills() {
@@ -200,6 +203,7 @@ export default function PaymentsPage() {
 
     await Promise.all(bills.map((bill) => deleteDoc(doc(db, "payments", String(bill.id)))));
     setBills([]);
+    void recordAudit({ action: "delete", module: "payments", description: `Cleared ${bills.length} payment records from the billing screen.`, metadata: { count: bills.length } });
   }
 
   return (
