@@ -26,6 +26,11 @@ test.describe("Rehab Centre staging smoke", () => {
     await expect(page.getByText(/Please enter your Patient Attender passkey/i)).toBeVisible();
   });
 
+  test("patient attender portal requires authentication", async ({ page }) => {
+    await page.goto("/attender", { waitUntil: "domcontentloaded" });
+    await expect(page).toHaveURL(/\\/login(?:\\?.*)?$/);
+  });
+
   test("unauthenticated root redirects to login", async ({ page }) => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/login(?:\?.*)?$/);
