@@ -90,6 +90,26 @@ export default function SettingsPage() {
     } finally { setLogoUploading(false); }
   }
 
+  async function optimizeLogo(file: File): Promise<string> {
+    const source = await createImageBitmap(file);
+    const maxSize = 512;
+    const scale = Math.min(1, maxSize / Math.max(source.width, source.height));
+    const width = Math.max(1, Math.round(source.width * scale));
+    const height = Math.max(1, Math.round(source.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      source.close();
+      throw new Error("CANVAS_UNAVAILABLE");
+    }
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(source, 0, 0, width, height);
+    source.close();
+    return canvas.toDataURL("image/webp", 0.82);
+  }
+
   async function removeLogo() {
     const previous = settings.logo; update("logo", null);
     if (previous?.includes("/o/")) {
