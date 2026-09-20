@@ -130,7 +130,7 @@ export default function PatientsPage() {
     try {
       const now = new Date().toISOString();
       if (editing) {
-        await updateDoc(doc(db, PATIENTS_COLLECTION, editing.id), {
+        await updateDoc(doc(db, PATIENTS_COLLECTION, editing.firestoreId || editing.id), {
           ...form,
           name: form.name.trim(),
           updatedAt: now,
