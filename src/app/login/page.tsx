@@ -141,5 +141,6 @@ export default function LoginPage() {
 }
 
 function Field({ label, value, onChange, type, placeholder, onEnter }: { label: string; value: string; onChange: (value: string) => void; type: string; placeholder: string; onEnter?: () => void }) {
-  return <div><label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label><input value={value} onChange={(event) => onChange(event.target.value)} type={type} placeholder={placeholder} onKeyDown={(event) => { if (event.key === "Enter") onEnter?.(); }} className="w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></div>;
+  const inputId = `login-${label.toLowerCase()}`;
+  return <div><label htmlFor={inputId} className="mb-2 block text-sm font-semibold text-slate-700">{label}</label><input id={inputId} aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} type={type} placeholder={placeholder} autoComplete={type === "password" ? "current-password" : "email"} onKeyDown={(event) => { if (event.key === "Enter") onEnter?.(); }} className="w-full rounded-xl border border-slate-200 p-3 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" /></div>;
 }
