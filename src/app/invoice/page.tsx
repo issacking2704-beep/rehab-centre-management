@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { addDoc, collection, doc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { recordAudit } from "@/lib/audit";
 
 type InvoiceItem = {
   id: number;
@@ -284,6 +285,7 @@ export default function InvoicePage() {
         createdAt: serverTimestamp(),
       });
       setSaveMessage(`Invoice ${invoiceNo} saved successfully.`);
+      void recordAudit({ action: "create", module: "invoices", recordId: ref.id, description: `Created invoice ${invoiceNo} for ${patientName || "patient"}.`, metadata: { grandTotal, amountPaid: paid, balance } });
       if (ref.id) {
         setTimeout(() => setSaveMessage(""), 5000);
       }
