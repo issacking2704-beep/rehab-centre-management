@@ -10,6 +10,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<BrandingSettings>(defaultBranding);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -20,6 +22,8 @@ export default function SettingsPage() {
     }
     void load();
   }, []);
+
+  useEffect(() => () => { if (logoPreview?.startsWith("blob:")) URL.revokeObjectURL(logoPreview); }, [logoPreview]);
 
   function update<K extends keyof BrandingSettings>(field: K, value: BrandingSettings[K]) {
     setSettings(current => ({ ...current, [field]: value }));
@@ -53,6 +57,7 @@ export default function SettingsPage() {
   async function resetSettings() {
     if (!window.confirm("Reset all branding and theme settings to defaults?")) return;
     setSettings(defaultBranding);
+    setLogoPreview(null);
     const token = await auth.currentUser?.getIdToken();
     if (!token) { alert("Authentication required."); return; }
     const response = await fetch("/api/settings/branding", {
@@ -68,11 +73,20 @@ export default function SettingsPage() {
   async function handleLogo(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]; if (!file) return;
     if (!file.type.startsWith("image/")) { alert("Please select an image file."); return; }
+    if (file.size > 2 * 1024 * 1024) { alert("Logo must be smaller than 2 MB."); return; }
+
+    if (logoPreview?.startsWith("blob:")) URL.revokeObjectURL(logoPreview);
+    setLogoPreview(URL.createObjectURL(file));
+    setLogoUploading(true);
     try {
-      const storageRef = ref(storage, `branding/logo-${Date.now()}-${file.name}`);
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+      const storageRef = ref(storage, `branding/logo-${Date.now()}-${safeName}`);
       await uploadBytes(storageRef, file, { contentType: file.type });
       update("logo", await getDownloadURL(storageRef));
-    } catch (error) { console.error("Logo upload failed", error); alert("Unable to upload logo."); }
+    } catch (error) {
+      console.error("Logo upload failed", error);
+      alert("Logo preview is shown, but the upload failed. Check that you are signed in as an admin or super admin.");
+    } finally { setLogoUploading(false); }
   }
 
   async function removeLogo() {
@@ -87,7 +101,7 @@ export default function SettingsPage() {
       <header className="border-b bg-white px-6 py-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div><h1 className="text-2xl font-bold">Branding & Theme</h1><p className="mt-1 text-sm text-slate-500">One place to control your centre identity and the visual theme of the entire app.</p></div>
-          <div className="flex gap-3"><button type="button" onClick={resetSettings} className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold hover:bg-slate-50">Reset</button><button type="button" onClick={saveSettings} disabled={saving} className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "💾 Save Changes"}</button></div>
+          <div className="flex gap-3"><button type="button" onClick={resetSettings} className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold hover:bg-slate-50">Reset</button><button type="button" onClick={saveSettings} disabled={saving || logoUploading} className="rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{saving ? "Saving…" : "💾 Save Changes"}</button></div>
         </div>
         {saved && <div className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">✓ Branding and theme saved.</div>}
       </header>
@@ -108,9 +122,9 @@ export default function SettingsPage() {
           <SettingsCard title="🖼️ Logo & App Identity" description="The logo is reused by the sidebar, login, dashboard loading state, documents and browser tab icon.">
             <div className="flex flex-col gap-6 md:flex-row md:items-center">
               <div className="flex h-32 w-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50">
-                {settings.logo ? <img src={settings.logo} alt="Centre logo" className="h-full w-full rounded-2xl object-contain p-2" /> : <span className="text-sm text-slate-400">No Logo</span>}
+                {logoPreview || settings.logo ? <img src={logoPreview || settings.logo || ""} alt="Centre logo" className="h-full w-full rounded-2xl object-contain p-2" /> : <span className="text-sm text-slate-400">No Logo</span>}
               </div>
-              <div className="flex-1"><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogo} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /><p className="mt-2 text-xs text-slate-500">Recommended: square PNG, SVG or WebP with transparent background.</p>{settings.logo && <button type="button" onClick={removeLogo} className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100">Remove Logo</button>}</div>
+              <div className="flex-1"><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogo} disabled={logoUploading} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm disabled:opacity-60" /><p className="mt-2 text-xs text-slate-500">Recommended: square PNG, SVG or WebP with transparent background. Maximum 2 MB.</p>{logoUploading && <p className="mt-2 text-xs font-semibold text-blue-600">Uploading logo…</p>}{(settings.logo || logoPreview) && <button type="button" onClick={removeLogo} disabled={logoUploading} className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50">Remove Logo</button>}</div>
             </div>
           </SettingsCard>
 
@@ -139,7 +153,7 @@ export default function SettingsPage() {
           <h2 className="text-lg font-bold">Live Preview</h2><p className="mb-5 text-sm text-slate-500">Preview the app identity and theme before saving.</p>
           <div className="overflow-hidden rounded-2xl border shadow-sm">
             <div className="flex items-center gap-3 p-4" style={{ background: settings.secondaryColor, color: "white" }}>
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl" style={{ background: settings.primaryColor }}>{settings.logo ? <img src={settings.logo} alt="" className="h-full w-full object-contain p-1" /> : "🏥"}</div>
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl" style={{ background: settings.primaryColor }}>{logoPreview || settings.logo ? <img src={logoPreview || settings.logo || ""} alt="" className="h-full w-full object-contain p-1" /> : "🏥"}</div>
               <div className="min-w-0"><p className="truncate font-bold">{settings.centreName}</p><p className="truncate text-xs opacity-80">{settings.tagline}</p></div>
             </div>
             <div className="space-y-3 p-5"><div className="flex gap-2"><span className="h-9 w-2/3 rounded-lg" style={{ background: settings.primaryColor }} /><span className="h-9 w-1/3 rounded-lg" style={{ background: settings.primaryColor, opacity: .25 }} /></div><div className="h-3 w-2/3 rounded" style={{ background: settings.secondaryColor, opacity: .2 }} /><div className="h-3 w-full rounded bg-slate-200" /><div className="h-3 w-5/6 rounded bg-slate-200" /></div>
