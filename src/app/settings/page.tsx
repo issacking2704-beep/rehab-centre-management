@@ -92,22 +92,49 @@ export default function SettingsPage() {
 
   async function optimizeLogo(file: File): Promise<string> {
     const source = await createImageBitmap(file);
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = source.width;
+    sourceCanvas.height = source.height;
+    const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+    if (!sourceCtx) {
+      source.close();
+      throw new Error("CANVAS_UNAVAILABLE");
+    }
+    sourceCtx.clearRect(0, 0, source.width, source.height);
+    sourceCtx.drawImage(source, 0, 0);
+    source.close();
+
+    // Crop transparent borders so the logo fills its available branding area.
+    const pixels = sourceCtx.getImageData(0, 0, source.width, source.height);
+    let left = source.width;
+    let top = source.height;
+    let right = -1;
+    let bottom = -1;
+    for (let y = 0; y < source.height; y += 1) {
+      for (let x = 0; x < source.width; x += 1) {
+        const alpha = pixels.data[(y * source.width + x) * 4 + 3];
+        if (alpha > 10) {
+          left = Math.min(left, x);
+          top = Math.min(top, y);
+          right = Math.max(right, x);
+          bottom = Math.max(bottom, y);
+        }
+      }
+    }
+    const cropWidth = right >= left ? right - left + 1 : source.width;
+    const cropHeight = bottom >= top ? bottom - top + 1 : source.height;
     const maxSize = 512;
-    const scale = Math.min(1, maxSize / Math.max(source.width, source.height));
-    const width = Math.max(1, Math.round(source.width * scale));
-    const height = Math.max(1, Math.round(source.height * scale));
+    const scale = Math.min(1, maxSize / Math.max(cropWidth, cropHeight));
+    const width = Math.max(1, Math.round(cropWidth * scale));
+    const height = Math.max(1, Math.round(cropHeight * scale));
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      source.close();
-      throw new Error("CANVAS_UNAVAILABLE");
-    }
+    if (!ctx) throw new Error("CANVAS_UNAVAILABLE");
     ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(source, 0, 0, width, height);
-    source.close();
-    return canvas.toDataURL("image/webp", 0.82);
+    ctx.drawImage(sourceCanvas, left, top, cropWidth, cropHeight, 0, 0, width, height);
+    return canvas.toDataURL("image/webp", 0.88);
   }
 
   async function removeLogo() {
@@ -143,7 +170,7 @@ export default function SettingsPage() {
           <SettingsCard title="🖼️ Logo & App Identity" description="The logo is reused by the sidebar, login, dashboard loading state, documents and browser tab icon.">
             <div className="flex flex-col gap-6 md:flex-row md:items-center">
               <div className="flex h-32 w-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50">
-                {logoPreview || settings.logo ? <img src={logoPreview || settings.logo || ""} alt="Centre logo" className="h-full w-full rounded-2xl object-contain p-2" /> : <span className="text-sm text-slate-400">No Logo</span>}
+                {logoPreview || settings.logo ? <img src={logoPreview || settings.logo || ""} alt="Centre logo" className="h-full w-full rounded-2xl object-contain" /> : <span className="text-sm text-slate-400">No Logo</span>}
               </div>
               <div className="flex-1"><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogo} disabled={logoUploading} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm disabled:opacity-60" /><p className="mt-2 text-xs text-slate-500">Recommended: square PNG, SVG or WebP with transparent background. Maximum 2 MB.</p>{logoUploading && <p className="mt-2 text-xs font-semibold text-blue-600">Optimizing logo…</p>}{(settings.logo || logoPreview) && <button type="button" onClick={removeLogo} disabled={logoUploading} className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50">Remove Logo</button>}</div>
             </div>
@@ -174,7 +201,7 @@ export default function SettingsPage() {
           <h2 className="text-lg font-bold">Live Preview</h2><p className="mb-5 text-sm text-slate-500">Preview the app identity and theme before saving.</p>
           <div className="overflow-hidden rounded-2xl border shadow-sm">
             <div className="flex items-center gap-3 p-4" style={{ background: settings.secondaryColor, color: "white" }}>
-              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl" style={{ background: settings.primaryColor }}>{logoPreview || settings.logo ? <img src={logoPreview || settings.logo || ""} alt="" className="h-full w-full object-contain p-1" /> : "🏥"}</div>
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl" style={{ background: settings.primaryColor }}>{logoPreview || settings.logo ? <img src={logoPreview || settings.logo || ""} alt="" className="h-full w-full object-contain" /> : "🏥"}</div>
               <div className="min-w-0"><p className="truncate font-bold">{settings.centreName}</p><p className="truncate text-xs opacity-80">{settings.tagline}</p></div>
             </div>
             <div className="space-y-3 p-5"><div className="flex gap-2"><span className="h-9 w-2/3 rounded-lg" style={{ background: settings.primaryColor }} /><span className="h-9 w-1/3 rounded-lg" style={{ background: settings.primaryColor, opacity: .25 }} /></div><div className="h-3 w-2/3 rounded" style={{ background: settings.secondaryColor, opacity: .2 }} /><div className="h-3 w-full rounded bg-slate-200" /><div className="h-3 w-5/6 rounded bg-slate-200" /></div>
