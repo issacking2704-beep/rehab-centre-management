@@ -91,50 +91,99 @@ export default function SettingsPage() {
   }
 
   async function optimizeLogo(file: File): Promise<string> {
-    const source = await createImageBitmap(file);
-    const sourceCanvas = document.createElement("canvas");
-    sourceCanvas.width = source.width;
-    sourceCanvas.height = source.height;
-    const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
-    if (!sourceCtx) {
-      source.close();
-      throw new Error("CANVAS_UNAVAILABLE");
-    }
-    sourceCtx.clearRect(0, 0, source.width, source.height);
-    sourceCtx.drawImage(source, 0, 0);
-    source.close();
+    // Use a normal HTMLImageElement instead of createImageBitmap so PNG, WebP,
+    // and SVG uploads work consistently across browsers.
+    const objectUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error("IMAGE_DECODE_FAILED"));
+        img.src = objectUrl;
+      });
 
-    // Crop transparent borders so the logo fills its available branding area.
-    const pixels = sourceCtx.getImageData(0, 0, source.width, source.height);
-    let left = source.width;
-    let top = source.height;
-    let right = -1;
-    let bottom = -1;
-    for (let y = 0; y < source.height; y += 1) {
-      for (let x = 0; x < source.width; x += 1) {
-        const alpha = pixels.data[(y * source.width + x) * 4 + 3];
-        if (alpha > 10) {
-          left = Math.min(left, x);
-          top = Math.min(top, y);
-          right = Math.max(right, x);
-          bottom = Math.max(bottom, y);
+      const maxSourceSize = 2048;
+      const sourceScale = Math.min(
+        1,
+        maxSourceSize / Math.max(image.naturalWidth, image.naturalHeight),
+      );
+      const sourceWidth = Math.max(1, Math.round(image.naturalWidth * sourceScale));
+      const sourceHeight = Math.max(1, Math.round(image.naturalHeight * sourceScale));
+
+      const sourceCanvas = document.createElement("canvas");
+      sourceCanvas.width = sourceWidth;
+      sourceCanvas.height = sourceHeight;
+      const sourceCtx = sourceCanvas.getContext("2d", { willReadFrequently: true });
+      if (!sourceCtx) throw new Error("CANVAS_UNAVAILABLE");
+
+      sourceCtx.clearRect(0, 0, sourceWidth, sourceHeight);
+      sourceCtx.drawImage(image, 0, 0, sourceWidth, sourceHeight);
+
+      // Find the visible bounds and remove transparent/empty margins.
+      const pixels = sourceCtx.getImageData(0, 0, sourceWidth, sourceHeight);
+      let left = sourceWidth;
+      let top = sourceHeight;
+      let right = -1;
+      let bottom = -1;
+
+      for (let y = 0; y < sourceHeight; y += 1) {
+        for (let x = 0; x < sourceWidth; x += 1) {
+          const alpha = pixels.data[(y * sourceWidth + x) * 4 + 3];
+          if (alpha > 10) {
+            left = Math.min(left, x);
+            top = Math.min(top, y);
+            right = Math.max(right, x);
+            bottom = Math.max(bottom, y);
+          }
         }
       }
+
+      const cropLeft = right >= left ? left : 0;
+      const cropTop = bottom >= top ? top : 0;
+      const cropWidth = right >= left ? right - left + 1 : sourceWidth;
+      const cropHeight = bottom >= top ? bottom - top + 1 : sourceHeight;
+
+      // Add only a tiny safety margin, rather than the large padding that
+      // previously made the logo appear small inside its preview box.
+      const margin = Math.max(2, Math.round(Math.max(cropWidth, cropHeight) * 0.01));
+      const paddedLeft = Math.max(0, cropLeft - margin);
+      const paddedTop = Math.max(0, cropTop - margin);
+      const paddedRight = Math.min(sourceWidth, cropLeft + cropWidth + margin);
+      const paddedBottom = Math.min(sourceHeight, cropTop + cropHeight + margin);
+      const finalCropWidth = Math.max(1, paddedRight - paddedLeft);
+      const finalCropHeight = Math.max(1, paddedBottom - paddedTop);
+
+      const maxSize = 512;
+      const scale = Math.min(1, maxSize / Math.max(finalCropWidth, finalCropHeight));
+      const width = Math.max(1, Math.round(finalCropWidth * scale));
+      const height = Math.max(1, Math.round(finalCropHeight * scale));
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("CANVAS_UNAVAILABLE");
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(
+        sourceCanvas,
+        paddedLeft,
+        paddedTop,
+        finalCropWidth,
+        finalCropHeight,
+        0,
+        0,
+        width,
+        height,
+      );
+
+      const webp = canvas.toDataURL("image/webp", 0.88);
+      if (webp.startsWith("data:image/webp")) return webp;
+
+      return canvas.toDataURL("image/png");
+    } finally {
+      URL.revokeObjectURL(objectUrl);
     }
-    const cropWidth = right >= left ? right - left + 1 : source.width;
-    const cropHeight = bottom >= top ? bottom - top + 1 : source.height;
-    const maxSize = 512;
-    const scale = Math.min(1, maxSize / Math.max(cropWidth, cropHeight));
-    const width = Math.max(1, Math.round(cropWidth * scale));
-    const height = Math.max(1, Math.round(cropHeight * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("CANVAS_UNAVAILABLE");
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(sourceCanvas, left, top, cropWidth, cropHeight, 0, 0, width, height);
-    return canvas.toDataURL("image/webp", 0.88);
   }
 
   async function removeLogo() {
