@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
+import { recordAudit } from "@/lib/audit";
 import { useBranding } from "@/components/branding-provider";
 
 type Mode = "staff" | "attender";
@@ -35,6 +36,8 @@ export default function LoginPage() {
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
       const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const snapshot = await getDoc(doc(db, "users", credential.user.uid));
+      const loginUser = snapshot.data();
+      void recordAudit({ action: "login", module: "authentication", recordId: credential.user.uid, description: "User signed in successfully.", metadata: { role: typeof loginUser?.role === "string" ? loginUser.role : null } });
       if (!snapshot.exists() || !snapshot.data()?.role) {
         await auth.signOut();
         setError("No valid staff profile exists for this account.");
