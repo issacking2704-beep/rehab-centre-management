@@ -29,6 +29,7 @@ export default function Home() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ patients: 0, active: 0, attendance: 0, pending: 0 });
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const branding = useBranding();
 
   useEffect(() => {
@@ -93,12 +94,22 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-900">
-      <aside className="fixed left-0 top-0 hidden h-screen w-64 bg-slate-950 text-white lg:block">
-        <div className="flex h-20 items-center border-b border-slate-800 px-6"><div className="mr-3 flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-xl">{branding.logo ? <img src={branding.logo} alt="" className="max-h-full max-w-full object-contain p-0" /> : "🏥"}</div><div><h1 className="font-bold">{branding.centreName}</h1><p className="text-xs text-slate-400">{branding.tagline}</p></div></div>
-        <nav className="p-4">{visibleModules.map((module) => <Link key={module.name} href={module.href} className="mb-1 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-slate-300 transition hover:bg-slate-800 hover:text-white"><span className="w-6 text-lg">{module.icon}</span><span className="text-sm font-medium">{module.name}</span></Link>)}</nav>
+      <aside className={`fixed left-0 top-0 z-30 hidden h-screen bg-slate-950 text-white transition-all duration-200 lg:block ${sidebarCollapsed ? "w-20" : "w-64"}`}>
+        <div className={`flex h-20 items-center border-b border-slate-800 ${sidebarCollapsed ? "justify-center px-2" : "px-4"}`}>
+          <div className={`flex h-14 ${sidebarCollapsed ? "w-14" : "w-14"} shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-xl`}>
+            {branding.logo ? <img src={branding.logo} alt={branding.centreName || "Logo"} className="max-h-full max-w-full object-contain" /> : "🏥"}
+          </div>
+          {!sidebarCollapsed && <div className="ml-3 min-w-0"><h1 className="truncate font-bold">{branding.centreName}</h1><p className="truncate text-xs text-slate-400">{branding.tagline}</p></div>}
+        </div>
+        <nav className={`p-3 ${sidebarCollapsed ? "px-2" : "p-4"}`}>
+          {visibleModules.map((module) => <Link key={module.name} href={module.href} title={sidebarCollapsed ? module.name : undefined} className={`mb-1 flex w-full items-center rounded-xl py-3 text-slate-300 transition hover:bg-slate-800 hover:text-white ${sidebarCollapsed ? "justify-center px-2" : "gap-3 px-4"}`}><span className="w-6 text-center text-lg">{module.icon}</span>{!sidebarCollapsed && <span className="text-sm font-medium">{module.name}</span>}</Link>)}
+        </nav>
+        <button type="button" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} className={`absolute bottom-4 flex items-center rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-slate-300 transition hover:bg-slate-800 hover:text-white ${sidebarCollapsed ? "left-1/2 -translate-x-1/2" : "right-4"}`}>
+          <span className="text-lg">{sidebarCollapsed ? "→" : "←"}</span>{!sidebarCollapsed && <span className="ml-2 text-xs font-medium">Collapse</span>}
+        </button>
       </aside>
 
-      <section className="lg:ml-64">
+      <section className={`lg:ml-64 transition-all duration-200 ${sidebarCollapsed ? "lg:ml-20" : "lg:ml-64"}`}>
         <header className="flex min-h-20 items-center justify-between border-b bg-white px-6 py-4 shadow-sm"><div><h2 className="text-xl font-bold">Dashboard</h2><p className="text-xs text-slate-500">{branding.tagline}</p></div><div className="flex items-center gap-3"><div className="hidden text-right sm:block"><p className="text-sm font-semibold">{profile.name || "User"}</p><p className="text-xs text-slate-500">{displayRole}</p></div><div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">{(profile.name || "U").charAt(0).toUpperCase()}</div><button type="button" onClick={handleLogout} className="rounded-xl border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50">Logout</button></div></header>
         <div className="p-6 sm:p-8">
           <div className="mb-8 rounded-2xl bg-blue-600 p-6 text-white shadow-lg"><p className="text-sm text-blue-100">Welcome back</p><h3 className="mt-1 text-2xl font-bold">{profile.name || "User"}</h3><p className="mt-2 text-sm text-blue-100">You are signed in as <strong>{displayRole}</strong>.</p></div>
