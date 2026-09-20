@@ -124,7 +124,12 @@ export default function PatientAttenderPortal() {
 
         <section className="rounded-2xl bg-blue-600 p-6 text-white shadow-lg">
           <p className="text-sm text-blue-100">Restricted clinical access</p>
-          <h2 className="mt-1 text-2xl font-bold">Your Assigned Patients</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="mt-1 text-2xl font-bold">Your Assigned Patients</h2>
+            <span data-testid="assigned-patient-count" className="rounded-full bg-white/15 px-3 py-1 text-sm font-bold text-white ring-1 ring-white/25">
+              {patients.length} {patients.length === 1 ? "patient" : "patients"} assigned
+            </span>
+          </div>
           <p className="mt-2 text-sm text-blue-100">You can view only patients assigned to your account. Patient editing, staff management, billing and other administrative tools are unavailable.</p>
           {lastUpdated && <p className="mt-3 text-xs text-blue-100">Last refreshed: {lastUpdated}</p>}
         </section>

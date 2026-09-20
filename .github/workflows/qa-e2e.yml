@@ -1,0 +1,65 @@
+name: QA E2E
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+  push:
+    branches:
+      - "qa/**"
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QA_BASE_URL: ${{ secrets.QA_BASE_URL }}
+      QA_STAFF_EMAIL: ${{ secrets.QA_STAFF_EMAIL }}
+      QA_STAFF_PASSWORD: ${{ secrets.QA_STAFF_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Playwright test runner
+        run: npm install --no-audit --no-fund --no-save @playwright/test@1.63.0
+
+      - name: Install Playwright browsers
+        run: npx --no-install playwright install --with-deps chromium
+
+      - name: Run QA smoke suite
+        if: env.QA_BASE_URL != ''
+        run: npx playwright test --project=chromium
+
+      - name: Run unauthenticated local checks when no QA URL is configured
+        if: env.QA_BASE_URL == ''
+        run: |
+          echo "QA_BASE_URL is not configured."
+          echo "Configure the GitHub Actions secret QA_BASE_URL before expecting remote E2E coverage."
+          exit 1
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          if-no-files-found: ignore
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/
+          if-no-files-found: ignore
