@@ -96,9 +96,18 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // Audit records are append-only for normal users. The client may only
+    // create a record for the currently authenticated user and must use the
+    // server timestamp supplied by the SDK. Normal users cannot alter history.
     match /auditLogs/{logId} {
       allow read: if isAdmin();
-      allow create: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.role == role()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.action is string
+        && request.resource.data.module is string
+        && request.resource.data.description is string;
       allow update, delete: if isSuperAdmin();
     }
 
