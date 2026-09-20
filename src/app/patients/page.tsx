@@ -76,7 +76,7 @@ export default function PatientsPage() {
       q,
       (snapshot) => {
         const next = snapshot.docs
-          .map((item) => ({ id: item.id, ...item.data() } as Patient))
+          .map((item) => ({ firestoreId: item.id, ...item.data() } as Patient))
            .filter((patient) => patient.isDeleted !== true)
           .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
         setPatients(next);
@@ -165,7 +165,7 @@ export default function PatientsPage() {
     if (!window.confirm(`Discharge ${patient.name}?`)) return;
     try {
       const date = new Date().toISOString().slice(0, 10);
-      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), { status: "Discharged", dischargeDate: date, updatedAt: new Date().toISOString() });
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id), { status: "Discharged", dischargeDate: date, updatedAt: new Date().toISOString() });
       setSelected(null);
     } catch (e) { console.error(e); setError("Unable to discharge the patient."); }
   }
@@ -175,7 +175,7 @@ export default function PatientsPage() {
     if (!window.confirm(`Move ${patient.name} to Deleted Patients?`)) return;
 
     try {
-      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id), {
         isDeleted: true,
         deletedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
