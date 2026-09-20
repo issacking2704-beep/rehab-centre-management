@@ -89,7 +89,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="rounded-3xl bg-white p-8 shadow-xl">
           <div className="text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-3xl">{branding.logo ? <img src={branding.logo} alt="" className="h-full w-full object-contain p-2" /> : "🏥"}</div>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-blue-600 text-3xl">{branding.logo ? <img src={branding.logo} alt="" className="h-full w-full object-cover p-0" /> : "🏥"}</div>
             <h1 className="mt-5 text-2xl font-bold text-slate-900">{branding.centreName}</h1>
             <p className="mt-1 text-sm text-slate-500">{branding.tagline}</p>
           </div>
