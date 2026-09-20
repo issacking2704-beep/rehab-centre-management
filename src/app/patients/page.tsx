@@ -43,6 +43,7 @@ export default function PatientsPage() {
   const [selected, setSelected] = useState<Patient | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [view, setView] = useState<"active" | "discharged" | "all">("active");
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (firebaseUser) => {
@@ -76,7 +77,7 @@ export default function PatientsPage() {
       (snapshot) => {
         const next = snapshot.docs
           .map((item) => ({ id: item.id, ...item.data() } as Patient))
-          .filter((patient) => patient.isDeleted !== true)
+           .filter((patient) => patient.isDeleted !== true)
           .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
         setPatients(next);
         setLoading(false);
@@ -92,9 +93,10 @@ export default function PatientsPage() {
   const canEdit = role ? hasPermission(role, "patients") : false;
 
   const filtered = useMemo(() => {
+    const visible = patients.filter((patient) => view === "all" || (view === "discharged" ? patient.status === "Discharged" : patient.status !== "Discharged"));
     const q = search.trim().toLowerCase();
-    if (!q) return patients;
-    return patients.filter((patient) =>
+    if (!q) return visible;
+    return visible.filter((patient) =>
       [patient.id, patient.name, patient.phone, patient.diagnosis, patient.therapist, patient.room]
         .join(" ")
         .toLowerCase()
@@ -133,6 +135,7 @@ export default function PatientsPage() {
           name: form.name.trim(),
           updatedAt: now,
           isDeleted: false,
+          status: form.dischargeDate ? "Discharged" : (editing.status || "Active"),
         });
       } else {
         const id = makePatientId(patients.map((patient) => patient.id));
@@ -143,6 +146,7 @@ export default function PatientsPage() {
           createdAt: now,
           updatedAt: now,
           isDeleted: false,
+          status: form.dischargeDate ? "Discharged" : "Active",
         });
       }
       setShowForm(false);
@@ -154,6 +158,16 @@ export default function PatientsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function discharge(patient: Patient) {
+    if (!canEdit || patient.status === "Discharged") return;
+    if (!window.confirm(`Discharge ${patient.name}?`)) return;
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), { status: "Discharged", dischargeDate: date, updatedAt: new Date().toISOString() });
+      setSelected(null);
+    } catch (e) { console.error(e); setError("Unable to discharge the patient."); }
   }
 
   async function softDelete(patient: Patient) {
@@ -191,6 +205,7 @@ export default function PatientsPage() {
             <p className="mt-1 text-sm text-slate-500">Live Firestore records • {patients.length} active patients</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <div className="flex rounded-xl border bg-white p-1"><button onClick={() => setView("active")} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === "active" ? "bg-blue-600 text-white" : ""}`}>Active</button><button onClick={() => setView("discharged")} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === "discharged" ? "bg-blue-600 text-white" : ""}`}>Discharged</button><button onClick={() => setView("all")} className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === "all" ? "bg-blue-600 text-white" : ""}`}>All</button></div>
             <a href="/" className="rounded-xl border px-4 py-2.5 text-sm font-semibold hover:bg-slate-50">← Dashboard</a>
             {canEdit && <button onClick={openNew} className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">＋ Add Patient</button>}
           </div>
@@ -241,7 +256,7 @@ export default function PatientsPage() {
                     <td className="px-5 py-4">{patient.room || "—"}</td>
                     <td className="px-5 py-4">{formatDate(patient.admissionDate)}</td>
                     <td className="px-5 py-4">
-                      {canEdit && <div className="flex gap-2"><button onClick={() => openEdit(patient)} className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">Edit</button><button onClick={() => softDelete(patient)} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">Delete</button></div>}
+                      {canEdit && <div className="flex gap-2"><button onClick={() => openEdit(patient)} className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">Edit</button>{patient.status !== "Discharged" && <button onClick={() => discharge(patient)} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">Discharge</button>}<button onClick={() => softDelete(patient)} className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">Delete</button></div>}
                     </td>
                   </tr>
                 ))}
@@ -262,7 +277,7 @@ export default function PatientsPage() {
                   <Info label="Diagnosis" value={patient.diagnosis || "—"} />
                   <Info label="Admission" value={formatDate(patient.admissionDate)} />
                 </div>
-                {canEdit && <div className="mt-3 flex gap-2"><button onClick={() => openEdit(patient)} className="flex-1 rounded-xl bg-blue-50 py-2 text-sm font-semibold text-blue-700">Edit</button><button onClick={() => softDelete(patient)} className="flex-1 rounded-xl bg-red-50 py-2 text-sm font-semibold text-red-700">Delete</button></div>}
+                {canEdit && <div className="mt-3 flex gap-2"><button onClick={() => openEdit(patient)} className="flex-1 rounded-xl bg-blue-50 py-2 text-sm font-semibold text-blue-700">Edit</button>{patient.status !== "Discharged" && <button onClick={() => discharge(patient)} className="flex-1 rounded-xl bg-amber-50 py-2 text-sm font-semibold text-amber-700">Discharge</button>}<button onClick={() => softDelete(patient)} className="flex-1 rounded-xl bg-red-50 py-2 text-sm font-semibold text-red-700">Delete</button></div>}
               </article>
             ))}
           </div>
@@ -301,7 +316,7 @@ export default function PatientsPage() {
           </div>
           <div className="mt-4 rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">Diagnosis</p><p className="mt-1 text-sm">{selected.diagnosis || "Not recorded"}</p></div>
           <div className="mt-3 rounded-xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">Notes</p><p className="mt-1 whitespace-pre-wrap text-sm">{selected.notes || "No notes"}</p></div>
-          {canEdit && <div className="mt-5 flex justify-end gap-2"><button onClick={() => { setSelected(null); openEdit(selected); }} className="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white">Edit</button><button onClick={() => softDelete(selected)} className="rounded-xl bg-red-600 px-5 py-2.5 font-semibold text-white">Move to Deleted</button></div>}
+          {canEdit && <div className="mt-5 flex justify-end gap-2">{selected.status !== "Discharged" && <button onClick={() => discharge(selected)} className="rounded-xl bg-amber-500 px-5 py-2.5 font-semibold text-white">Discharge</button>}<button onClick={() => { setSelected(null); openEdit(selected); }} className="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white">Edit</button><button onClick={() => softDelete(selected)} className="rounded-xl bg-red-600 px-5 py-2.5 font-semibold text-white">Move to Deleted</button></div>}
         </Modal>
       )}
     </main>
