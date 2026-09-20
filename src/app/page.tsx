@@ -21,6 +21,7 @@ const modules = [
   { name: "Letterhead Maker", icon: "📜", href: "/letterhead", permission: "letterhead" },
   { name: "Reports", icon: "📊", href: "/reports", permission: "reports" },
   { name: "Settings", icon: "⚙️", href: "/settings", permission: "settings" },
+  { name: "Deleted Patients", icon: "🗑️", href: "/deleted-patients", permission: "deleted_patients" },
 ];
 
 export default function Home() {
