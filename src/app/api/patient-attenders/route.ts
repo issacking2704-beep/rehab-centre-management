@@ -34,6 +34,11 @@ function serializeDate(value: any): string {
   return typeof value === "string" ? value : "";
 }
 
+function canonicalPatientId(snapshot: FirebaseFirestore.DocumentSnapshot): string {
+  const data = snapshot.data() || {};
+  return String(data.id || snapshot.id);
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireManager(request);
@@ -43,32 +48,44 @@ export async function GET(request: NextRequest) {
       adminDb.collection("patients").get(),
     ]);
 
+    const patientByAnyId = new Map<string, string>();
+    const activePatients = patientSnapshot.docs.filter((doc) => doc.data()?.isDeleted !== true);
+    activePatients.forEach((doc) => {
+      const canonicalId = canonicalPatientId(doc);
+      patientByAnyId.set(doc.id, canonicalId);
+      patientByAnyId.set(canonicalId, canonicalId);
+    });
+
     const attenders = staffSnapshot.docs.map((doc) => {
       const data = doc.data();
+      const rawAssigned = Array.isArray(data.assignedPatientIds) ? data.assignedPatientIds.map(String) : [];
+      const normalized = [...new Set(rawAssigned.map((id) => patientByAnyId.get(id)).filter((id): id is string => Boolean(id)))];
       return {
         uid: doc.id,
         name: data.name || "",
         email: data.email || "",
         phone: data.phone || "",
         active: data.active !== false,
-        assignedPatientIds: Array.isArray(data.assignedPatientIds) ? data.assignedPatientIds : [],
+        assignedPatientIds: normalized,
         passkeyLast4: data.passkeyLast4 || "",
         passkeyCreatedAt: serializeDate(data.passkeyCreatedAt),
         passkeyLastUsedAt: serializeDate(data.passkeyLastUsedAt),
       };
     });
 
-    const patients = patientSnapshot.docs
-      .map((doc) => ({ id: doc.id, ...doc.data() }))
-      .filter((patient: any) => patient.isDeleted !== true)
-      .map((patient: any) => ({
-        id: patient.id,
-        name: patient.name || "",
-        phone: patient.phone || "",
-        room: patient.room || "",
-        diagnosis: patient.diagnosis || "",
-        admissionDate: patient.admissionDate || "",
-      }))
+    const patients = activePatients
+      .map((doc) => {
+        const data = doc.data();
+        return {
+          id: canonicalPatientId(doc),
+          firestoreId: doc.id,
+          name: data.name || "",
+          phone: data.phone || "",
+          room: data.room || "",
+          diagnosis: data.diagnosis || "",
+          admissionDate: data.admissionDate || "",
+        };
+      })
       .sort((a, b) => a.name.localeCompare(b.name));
 
     return NextResponse.json({ success: true, attenders, patients });
@@ -84,10 +101,10 @@ export async function PATCH(request: NextRequest) {
     const manager = await requireManager(request);
     const body = await request.json();
     const uid = String(body.uid || "").trim();
-    const assignedPatientIds: string[] = Array.isArray(body.assignedPatientIds)
+    const requestedIds: string[] = Array.isArray(body.assignedPatientIds)
       ? body.assignedPatientIds.map((id: unknown) => String(id).trim()).filter(Boolean)
       : [];
-    const uniquePatientIds = [...new Set(assignedPatientIds)];
+    const uniqueRequestedIds = [...new Set(requestedIds)];
 
     if (!uid) return errorResponse("Patient Attender UID is required.");
 
@@ -97,21 +114,27 @@ export async function PATCH(request: NextRequest) {
       return errorResponse("Patient Attender account not found.", 404);
     }
 
-    const validPatientIds = new Set<string>();
-    if (uniquePatientIds.length) {
-      const snapshots = await Promise.all(
-        uniquePatientIds.map((id: string) => adminDb.collection("patients").doc(String(id)).get())
-      );
-      snapshots.forEach((snapshot) => {
-        if (snapshot.exists && snapshot.data()?.isDeleted !== true) validPatientIds.add(snapshot.id);
+    // Assignments are stored using the application's patient ID (for example RC-00001),
+    // not the random Firestore document ID. Accept either form here so existing data
+    // can be repaired automatically.
+    const patientSnapshot = await adminDb.collection("patients").get();
+    const patientByAnyId = new Map<string, string>();
+    patientSnapshot.docs
+      .filter((doc) => doc.data()?.isDeleted !== true)
+      .forEach((doc) => {
+        const canonicalId = canonicalPatientId(doc);
+        patientByAnyId.set(doc.id, canonicalId);
+        patientByAnyId.set(canonicalId, canonicalId);
       });
-    }
 
-    const cleanIds = uniquePatientIds.filter((id: string) => validPatientIds.has(id));
+    const cleanIds = [...new Set(
+      uniqueRequestedIds
+        .map((id) => patientByAnyId.get(id))
+        .filter((id): id is string => Boolean(id))
+    )];
+
     await staffRef.update({ assignedPatientIds: cleanIds, updatedAt: new Date() });
 
-    // Read the document back immediately so the UI only reports success when
-    // Firestore actually persisted the assignment list.
     const verifySnapshot = await staffRef.get();
     const savedIds = Array.isArray(verifySnapshot.data()?.assignedPatientIds)
       ? verifySnapshot.data()?.assignedPatientIds.map((id: unknown) => String(id))
@@ -121,9 +144,22 @@ export async function PATCH(request: NextRequest) {
       return errorResponse("Assignments could not be verified after saving. Please retry.", 500);
     }
 
-    await recordServerAudit({ action: "update", module: "patient-attenders", recordId: uid, description: "Updated Patient Attender patient assignments.", userId: manager.uid, role: manager.role, metadata: { assignedCount: savedIds.length } });
+    await recordServerAudit({
+      action: "update",
+      module: "patient-attenders",
+      recordId: uid,
+      description: "Updated Patient Attender patient assignments.",
+      userId: manager.uid,
+      role: manager.role,
+      metadata: { assignedCount: savedIds.length },
+    });
 
-    return NextResponse.json({ success: true, assignedPatientIds: savedIds, assignedCount: savedIds.length, message: "Patient assignments updated." });
+    return NextResponse.json({
+      success: true,
+      assignedPatientIds: savedIds,
+      assignedCount: savedIds.length,
+      message: "Patient assignments updated.",
+    });
   } catch (error: any) {
     console.error("PATCH /api/patient-attenders:", error);
     const message = error?.message || "Failed to update assignments.";
