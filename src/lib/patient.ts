@@ -1,5 +1,7 @@
 export type Patient = {
   id: string;
+  /** Firestore document ID; kept separate from the human-facing patient ID. */
+  firestoreId?: string;
   name: string;
   age: string;
   gender: string;
