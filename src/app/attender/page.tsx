@@ -105,7 +105,7 @@ export default function PatientAttenderPortal() {
       <header className="border-b bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-2xl">{branding.logo ? <img src={branding.logo} alt="" className="h-full w-full object-contain p-1" /> : "🏥"}</div>
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl bg-blue-600 text-2xl">{branding.logo ? <img src={branding.logo} alt="" className="h-full w-full object-cover p-0" /> : "🏥"}</div>
             <div>
               <h1 className="text-xl font-bold">{branding.centreName}</h1>
               <p className="text-xs text-slate-400">{branding.tagline}</p>
