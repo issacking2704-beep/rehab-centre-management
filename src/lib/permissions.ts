@@ -11,13 +11,13 @@ export type UserRole =
 
 export const permissions: Record<UserRole, string[]> = {
   super_admin: ["dashboard", "patients", "staff", "attendance", "vitals", "billing", "invoices", "letterhead", "documents", "reports", "settings", "deleted_patients"],
-  admin: ["dashboard", "patients", "staff", "attendance", "vitals", "billing", "invoices", "letterhead", "documents", "reports"],
+  admin: ["dashboard", "patients", "staff", "attendance", "vitals", "billing", "invoices", "letterhead", "documents", "reports", "deleted_patients"],
   doctor: ["dashboard", "patients", "vitals", "reports", "documents"],
   staff: ["dashboard", "patients", "attendance", "vitals", "documents"],
   accounts: ["dashboard", "patients", "billing", "invoices", "reports", "documents"],
   reception: ["dashboard", "patients", "attendance", "billing", "invoices", "documents"],
   viewer: ["dashboard", "patients", "vitals", "reports"],
-  sub_admin: ["dashboard", "patients", "vitals", "attendance"],
+  sub_admin: ["dashboard", "patients", "vitals", "attendance", "deleted_patients"],
   patient_attender: ["dashboard", "attender_portal"],
 };
 
