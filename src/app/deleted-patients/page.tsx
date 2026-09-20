@@ -45,7 +45,7 @@ export default function DeletedPatientsPage() {
     const q = query(collection(db, PATIENTS_COLLECTION));
     return onSnapshot(q, (snapshot) => {
       const deleted = snapshot.docs
-        .map((item) => ({ id: item.id, ...item.data() } as Patient))
+        .map((item) => ({ firestoreId: item.id, ...item.data() } as Patient))
         .filter((patient) => patient.isDeleted === true)
         .sort((a, b) => (b.deletedAt || "").localeCompare(a.deletedAt || ""));
       setPatients(deleted);
@@ -66,7 +66,7 @@ export default function DeletedPatientsPage() {
     if (!role || !isSuperAdmin(role) && !["admin", "sub_admin"].includes(role)) return;
     if (!window.confirm(`Restore ${patient.name} to active patients?`)) return;
     try {
-      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), { isDeleted: false, deletedAt: null, updatedAt: new Date().toISOString() });
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id), { isDeleted: false, deletedAt: null, updatedAt: new Date().toISOString() });
       setSelected(null);
     } catch (restoreError) {
       console.error(restoreError);
@@ -94,7 +94,7 @@ export default function DeletedPatientsPage() {
         const ids = u.data().assignedPatientIds;
         return Array.isArray(ids) && ids.includes(patient.id);
       }).map((u) => updateDoc(u.ref, { assignedPatientIds: arrayRemove(patient.id) })));
-      await deleteDoc(doc(db, PATIENTS_COLLECTION, patient.id));
+      await deleteDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id));
       setSelected(null);
     } catch (deleteError) {
       console.error(deleteError);
