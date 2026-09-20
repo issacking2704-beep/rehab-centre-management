@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { recordServerAudit } from "@/lib/audit-server";
 import {
   generatePatientAttenderPasskey,
   hashPatientAttenderPasskey,
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
       throw firestoreError;
     }
 
+    await recordServerAudit({ action: "create", module: "staff", recordId: userRecord.uid, description: `Created staff account ${name} with role ${role}.`, userId: manager.uid, role: manager.role, metadata: { createdRole: role } });
     return NextResponse.json({ success: true, message: role === "patient_attender" ? "Patient Attender created. Save the generated passkey securely." : "Staff account created successfully.", passkey: passkey || undefined, staff: { uid: userRecord.uid, name, email, phone, role, active: true, assignedPatientIds: cleanAssignedPatientIds } }, { status: 201 });
   } catch (error) {
     console.error("POST /api/staff:", error);
@@ -175,6 +177,7 @@ export async function PATCH(request: NextRequest) {
     if (staffData.role === "patient_attender" && staffData.passkeyHash) {
       await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(String(staffData.passkeyHash)).update({ active });
     }
+    await recordServerAudit({ action: "update", module: "staff", recordId: uid, description: `${active ? "Enabled" : "Disabled"} staff account ${uid}.`, userId: (await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid, role: (await adminDb.collection("users").doc((await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid).get()).data()?.role || "" });
     return NextResponse.json({ success: true, message: active ? "Staff account enabled." : "Staff account disabled." });
   } catch (error) {
     console.error("PATCH /api/staff:", error);
@@ -196,6 +199,7 @@ export async function DELETE(request: NextRequest) {
     await adminAuth.deleteUser(uid);
     if (staffData.passkeyHash) await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(String(staffData.passkeyHash)).delete();
     await staffRef.delete();
+    await recordServerAudit({ action: "delete", module: "staff", recordId: uid, description: `Deleted staff account ${uid}.`, userId: (await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid, role: String((await adminDb.collection("users").doc((await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid).get()).data()?.role || "") });
     return NextResponse.json({ success: true, message: "Staff account deleted." });
   } catch (error) {
     console.error("DELETE /api/staff:", error);
