@@ -31,27 +31,24 @@ export async function GET(request: NextRequest) {
   try {
     const { uid, userData } = await requireAttender(request);
     const assignedIds = Array.isArray(userData.assignedPatientIds)
-      ? userData.assignedPatientIds.map(String)
+      ? [...new Set(userData.assignedPatientIds.map(String))]
       : [];
 
-    if (!assignedIds.length) {
-      return NextResponse.json({
-        success: true,
-        attender: { uid, name: userData.name || "Patient Attender" },
-        patients: [],
-        vitals: [],
-      });
-    }
+    const patientSnapshot = await adminDb.collection("patients").get();
+    const assignedSet = new Set(assignedIds);
 
-    const patientSnapshots = await Promise.all(
-      assignedIds.map((id) => adminDb.collection("patients").doc(id).get())
-    );
-    const patients = patientSnapshots
+    // Resolve both canonical patient IDs (RC-00001) and legacy Firestore IDs.
+    const patients = patientSnapshot.docs
       .filter((snapshot) => snapshot.exists && snapshot.data()?.isDeleted !== true)
+      .filter((snapshot) => {
+        const data = snapshot.data() || {};
+        return assignedSet.has(snapshot.id) || assignedSet.has(String(data.id || ""));
+      })
       .map((snapshot) => {
         const data = snapshot.data() || {};
         return {
-          id: snapshot.id,
+          id: String(data.id || snapshot.id),
+          firestoreId: snapshot.id,
           name: data.name || "",
           age: data.age || "",
           gender: data.gender || "",
@@ -65,11 +62,25 @@ export async function GET(request: NextRequest) {
         };
       });
 
+    if (!assignedIds.length) {
+      return NextResponse.json({
+        success: true,
+        attender: { uid, name: userData.name || "Patient Attender" },
+        patients: [],
+        vitals: [],
+      });
+    }
+
+    const allowedFirestoreIds = new Set(patients.map((patient) => patient.firestoreId));
+    const allowedPatientIds = new Set(patients.map((patient) => patient.id));
+
     const vitalSnapshots = await adminDb.collection("vitals").get();
-    const allowed = new Set(assignedIds);
     const vitals = vitalSnapshots.docs
       .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }))
-      .filter((vital: any) => allowed.has(String(vital.patientId)))
+      .filter((vital: any) => {
+        const patientId = String(vital.patientId || "");
+        return allowedPatientIds.has(patientId) || allowedFirestoreIds.has(patientId);
+      })
       .map((vital: any) => ({
         id: vital.id,
         patientId: String(vital.patientId || ""),
