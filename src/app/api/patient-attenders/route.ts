@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { recordServerAudit } from "@/lib/audit-server";
 import {
   generatePatientAttenderPasskey,
   hashPatientAttenderPasskey,
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireManager(request);
+    const manager = await requireManager(request);
     const body = await request.json();
     const uid = String(body.uid || "").trim();
     const assignedPatientIds: string[] = Array.isArray(body.assignedPatientIds)
@@ -106,6 +107,7 @@ export async function PATCH(request: NextRequest) {
 
     const cleanIds = uniquePatientIds.filter((id: string) => validPatientIds.has(id));
     await staffRef.update({ assignedPatientIds: cleanIds, updatedAt: new Date() });
+    await recordServerAudit({ action: "update", module: "patient-attenders", recordId: uid, description: "Updated Patient Attender patient assignments.", userId: manager.uid, role: manager.role, metadata: { assignedCount: cleanIds.length } });
 
     return NextResponse.json({ success: true, assignedPatientIds: cleanIds, message: "Patient assignments updated." });
   } catch (error: any) {
@@ -117,7 +119,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireManager(request);
+    const manager = await requireManager(request);
     const body = await request.json();
     const uid = String(body.uid || "").trim();
     if (!uid) return errorResponse("Patient Attender UID is required.");
@@ -148,6 +150,7 @@ export async function POST(request: NextRequest) {
       passkeyLastUsedAt: null,
     });
     await batch.commit();
+    await recordServerAudit({ action: "update", module: "patient-attenders", recordId: uid, description: "Regenerated Patient Attender passkey.", userId: manager.uid, role: manager.role });
 
     return NextResponse.json({ success: true, passkey, message: "A new Patient Attender passkey was generated." });
   } catch (error: any) {
