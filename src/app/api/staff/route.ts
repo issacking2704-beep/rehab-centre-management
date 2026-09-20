@@ -162,7 +162,7 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    await requireStaffManager(request);
+    const manager = await requireStaffManager(request);
     const body = await request.json();
     const uid = String(body.uid || "").trim();
     const active = Boolean(body.active);
@@ -177,7 +177,7 @@ export async function PATCH(request: NextRequest) {
     if (staffData.role === "patient_attender" && staffData.passkeyHash) {
       await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(String(staffData.passkeyHash)).update({ active });
     }
-    await recordServerAudit({ action: "update", module: "staff", recordId: uid, description: `${active ? "Enabled" : "Disabled"} staff account ${uid}.`, userId: (await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid, role: (await adminDb.collection("users").doc((await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid).get()).data()?.role || "" });
+    await recordServerAudit({ action: "update", module: "staff", recordId: uid, description: `${active ? "Enabled" : "Disabled"} staff account ${uid}.`, userId: manager.uid, role: manager.role });
     return NextResponse.json({ success: true, message: active ? "Staff account enabled." : "Staff account disabled." });
   } catch (error) {
     console.error("PATCH /api/staff:", error);
@@ -187,7 +187,7 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireStaffManager(request);
+    const manager = await requireStaffManager(request);
     const body = await request.json();
     const uid = String(body.uid || "").trim();
     if (!uid) return validationError("Staff UID is required.");
@@ -199,7 +199,7 @@ export async function DELETE(request: NextRequest) {
     await adminAuth.deleteUser(uid);
     if (staffData.passkeyHash) await adminDb.collection(PATIENT_ATTENDER_PASSKEY_COLLECTION).doc(String(staffData.passkeyHash)).delete();
     await staffRef.delete();
-    await recordServerAudit({ action: "delete", module: "staff", recordId: uid, description: `Deleted staff account ${uid}.`, userId: (await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid, role: String((await adminDb.collection("users").doc((await adminAuth.verifyIdToken(request.headers.get("authorization")!.substring(7).trim())).uid).get()).data()?.role || "") });
+    await recordServerAudit({ action: "delete", module: "staff", recordId: uid, description: `Deleted staff account ${uid}.`, userId: manager.uid, role: manager.role });
     return NextResponse.json({ success: true, message: "Staff account deleted." });
   } catch (error) {
     console.error("DELETE /api/staff:", error);
