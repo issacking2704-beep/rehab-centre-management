@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes, deleteObject } from "firebase/storage";
-import { db, storage } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
 import { defaultBranding, BrandingSettings, ThemeMode, UiDensity, UiRadius } from "@/components/branding-provider";
 
 export default function SettingsPage() {
@@ -29,21 +29,38 @@ export default function SettingsPage() {
   async function saveSettings() {
     setSaving(true);
     try {
-      await setDoc(doc(db, "settings", "branding"), settings, { merge: true });
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) throw new Error("AUTH_REQUIRED");
+      const response = await fetch("/api/settings/branding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ settings }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "SETTINGS_SAVE_FAILED");
+      }
       localStorage.setItem("rehabCentreSettings", JSON.stringify(settings));
       window.dispatchEvent(new Event("rehab-branding-updated"));
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
       console.error("Unable to save branding settings", error);
-      alert("Unable to save settings. Check your account permissions.");
+      alert(error instanceof Error ? error.message : "Unable to save settings.");
     } finally { setSaving(false); }
   }
 
   async function resetSettings() {
     if (!window.confirm("Reset all branding and theme settings to defaults?")) return;
     setSettings(defaultBranding);
-    await setDoc(doc(db, "settings", "branding"), defaultBranding);
+    const token = await auth.currentUser?.getIdToken();
+    if (!token) { alert("Authentication required."); return; }
+    const response = await fetch("/api/settings/branding", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ settings: defaultBranding }),
+    });
+    if (!response.ok) { alert("Unable to reset settings."); return; }
     localStorage.setItem("rehabCentreSettings", JSON.stringify(defaultBranding));
     window.dispatchEvent(new Event("rehab-branding-updated"));
   }
