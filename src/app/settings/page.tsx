@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes, deleteObject } from "firebase/storage";
+import { ref, deleteObject } from "firebase/storage";
 import { auth, db, storage } from "@/lib/firebase";
 import { defaultBranding, BrandingSettings, ThemeMode, UiDensity, UiRadius } from "@/components/branding-provider";
 
@@ -76,16 +76,17 @@ export default function SettingsPage() {
     if (file.size > 2 * 1024 * 1024) { alert("Logo must be smaller than 2 MB."); return; }
 
     if (logoPreview?.startsWith("blob:")) URL.revokeObjectURL(logoPreview);
-    setLogoPreview(URL.createObjectURL(file));
     setLogoUploading(true);
     try {
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-      const storageRef = ref(storage, `branding/logo-${Date.now()}-${safeName}`);
-      await uploadBytes(storageRef, file, { contentType: file.type });
-      update("logo", await getDownloadURL(storageRef));
+      const dataUrl = await optimizeLogo(file);
+      if (dataUrl.length > 700_000) throw new Error("LOGO_TOO_LARGE_AFTER_COMPRESSION");
+      setLogoPreview(dataUrl);
+      update("logo", dataUrl);
     } catch (error) {
-      console.error("Logo upload failed", error);
-      alert("Logo preview is shown, but the upload failed. Check that you are signed in as an admin or super admin.");
+      console.error("Logo processing failed", error);
+      alert(error instanceof Error && error.message === "LOGO_TOO_LARGE_AFTER_COMPRESSION"
+        ? "This logo is still too large after compression. Please choose a simpler or smaller image."
+        : "Unable to process this logo.");
     } finally { setLogoUploading(false); }
   }
 
@@ -124,7 +125,7 @@ export default function SettingsPage() {
               <div className="flex h-32 w-32 items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50">
                 {logoPreview || settings.logo ? <img src={logoPreview || settings.logo || ""} alt="Centre logo" className="h-full w-full rounded-2xl object-contain p-2" /> : <span className="text-sm text-slate-400">No Logo</span>}
               </div>
-              <div className="flex-1"><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogo} disabled={logoUploading} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm disabled:opacity-60" /><p className="mt-2 text-xs text-slate-500">Recommended: square PNG, SVG or WebP with transparent background. Maximum 2 MB.</p>{logoUploading && <p className="mt-2 text-xs font-semibold text-blue-600">Uploading logo…</p>}{(settings.logo || logoPreview) && <button type="button" onClick={removeLogo} disabled={logoUploading} className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50">Remove Logo</button>}</div>
+              <div className="flex-1"><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={handleLogo} disabled={logoUploading} className="w-full rounded-xl border border-slate-200 bg-white p-3 text-sm disabled:opacity-60" /><p className="mt-2 text-xs text-slate-500">Recommended: square PNG, SVG or WebP with transparent background. Maximum 2 MB.</p>{logoUploading && <p className="mt-2 text-xs font-semibold text-blue-600">Optimizing logo…</p>}{(settings.logo || logoPreview) && <button type="button" onClick={removeLogo} disabled={logoUploading} className="mt-3 rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50">Remove Logo</button>}</div>
             </div>
           </SettingsCard>
 
