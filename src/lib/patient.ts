@@ -8,6 +8,7 @@ export type Patient = {
   emergencyContact: string;
   admissionDate: string;
   dischargeDate: string;
+  status?: "Active" | "Discharged";
   diagnosis: string;
   therapist: string;
   room: string;
