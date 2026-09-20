@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, deleteDoc, doc, getDocs, onSnapshot, query, updateDoc } from "firebase/firestore";
+import { arrayRemove, collection, deleteDoc, doc, getDocs, onSnapshot, query, updateDoc, where, writeBatch } from "firebase/firestore";
+import { deleteObject, ref } from "firebase/storage";
 import { onAuthStateChanged, User } from "firebase/auth";
 
-import { auth, db } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
 import { isSuperAdmin, UserRole } from "@/lib/permissions";
 import { Patient, PATIENTS_COLLECTION } from "@/lib/patient";
 
@@ -75,13 +76,29 @@ export default function DeletedPatientsPage() {
 
   async function permanentDelete(patient: Patient) {
     if (!role || !isSuperAdmin(role)) return;
-    if (!window.confirm(`Permanently delete ${patient.name}? This cannot be undone.`)) return;
+    if (!window.confirm(`Permanently delete ${patient.name}? This will remove the patient and linked clinical, billing, document and assignment records. This cannot be undone.`)) return;
     try {
+      const collections = ["vitals", "payments", "invoices", "bills", "patientFiles", "reports", "documents"];
+      for (const name of collections) {
+        const snap = await getDocs(query(collection(db, name), where("patientId", "==", patient.id)));
+        for (const item of snap.docs) {
+          const data = item.data() as { storagePath?: string };
+          if (name === "patientFiles" && data.storagePath) {
+            try { await deleteObject(ref(storage, data.storagePath)); } catch {}
+          }
+          await deleteDoc(item.ref);
+        }
+      }
+      const usersSnap = await getDocs(collection(db, "users"));
+      await Promise.all(usersSnap.docs.filter((u) => {
+        const ids = u.data().assignedPatientIds;
+        return Array.isArray(ids) && ids.includes(patient.id);
+      }).map((u) => updateDoc(u.ref, { assignedPatientIds: arrayRemove(patient.id) })));
       await deleteDoc(doc(db, PATIENTS_COLLECTION, patient.id));
       setSelected(null);
     } catch (deleteError) {
       console.error(deleteError);
-      setError("Permanent deletion was denied or failed.");
+      setError("Permanent deletion was denied or failed. No further records were removed after the failed operation.");
     }
   }
 
