@@ -64,3 +64,27 @@ The app includes a web manifest and responsive viewport configuration so it can 
 ## Repository safety
 
 This repository should remain private while the system is being developed. Never commit `.env.local`, Firebase Admin private keys, patient information, medical reports, or payment credentials.
+
+## Deploy Firebase security rules
+
+The repository includes `firebase.json` and `.firebaserc` for the `rehab-centre-management` Firebase project. After signing in to the Firebase CLI with an account that has permission to deploy rules, run:
+
+```bash
+npm install -g firebase-tools
+firebase login
+firebase use rehab-centre-management
+firebase deploy --only firestore:rules,storage
+```
+
+Review the rules against the production roles before deployment. After deploying, test with a non-admin account to confirm it cannot read staff photos or upload/delete files outside its permissions. Never use real patient data for automated QA.
+
+## Final production acceptance checklist
+
+- [ ] Deploy and verify Firestore and Storage rules in Firebase Console/CLI.
+- [ ] Test patient create/edit/photo upload, discharge, soft-delete, restore, and permanent delete using a dedicated test patient.
+- [ ] Test staff photo upload, staff enable/disable, and Patient Attender assignment persistence.
+- [ ] Test manual and QR attendance, including duplicate scans and date/time boundaries.
+- [ ] Verify vitals, bills, invoices, document uploads/downloads, and audit log entries with a test account.
+- [ ] Test desktop and tablet/mobile layouts, including sidebar collapse/restore and branding/logo display.
+- [ ] Confirm backup and restore procedures and validate production access for every role.
+- [ ] Do not use real patient data in preview/staging; remove test records and files after acceptance.
