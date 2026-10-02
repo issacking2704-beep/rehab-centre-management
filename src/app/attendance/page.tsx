@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, deleteDoc, doc, getDocs, addDoc, updateDoc, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { recordAudit } from "@/lib/audit";
 
 type Staff = {
   id: string;
@@ -279,6 +280,7 @@ export default function AttendancePage() {
     if (editingId) {
       const updated = { staffId: member.id, employeeId: member.employeeId, staffName: member.name, role: member.role, date: form.date, status: form.status, checkIn: form.checkIn, checkOut: form.checkOut, notes: form.notes };
       await updateDoc(doc(db, "attendance", editingId), updated);
+      void recordAudit({ action: "update", module: "attendance", recordId: editingId, description: `Updated attendance for ${member.name} on ${form.date}.`, metadata: { status: form.status } });
       setRecords((current) => current.map((record) => record.id === editingId ? { ...record, ...updated } : record));
 
       closeForm();
@@ -300,6 +302,7 @@ export default function AttendancePage() {
     };
 
     const created = await addDoc(collection(db, "attendance"), { ...newRecord, createdAt: new Date().toISOString() });
+    void recordAudit({ action: "create", module: "attendance", recordId: created.id, description: `Recorded attendance for ${member.name} on ${form.date}.`, metadata: { status: form.status } });
     setRecords((current) => [{ ...newRecord, id: created.id }, ...current]);
 
     closeForm();
@@ -320,6 +323,7 @@ export default function AttendancePage() {
     if (!confirmed) return;
 
     await deleteDoc(doc(db, "attendance", record.id));
+    void recordAudit({ action: "delete", module: "attendance", recordId: record.id, description: `Deleted attendance for ${record.staffName} on ${record.date}.`, metadata: { status: record.status } });
     setRecords((current) => current.filter((item) => item.id !== record.id));
 
     setSelectedRecord(null);
