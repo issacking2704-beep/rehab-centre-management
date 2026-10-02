@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     const snapshot = await adminDb.collection("users").get();
     const staff = snapshot.docs.map((doc) => {
       const data = doc.data();
-      return { uid: doc.id, name: data.name || "", email: data.email || "", role: data.role || "", phone: data.phone || "", active: data.active !== false, photoURL: data.photoURL || "", createdAt: serializeDate(data.createdAt), assignedPatientIds: Array.isArray(data.assignedPatientIds) ? data.assignedPatientIds : [], passkeyLast4: data.passkeyLast4 || "", passkeyCreatedAt: serializeDate(data.passkeyCreatedAt), passkeyLastUsedAt: serializeDate(data.passkeyLastUsedAt) };
+      return { uid: doc.id, name: data.name || "", email: data.email || "", role: data.role || "", phone: data.phone || "", active: data.active !== false, photoPath: data.photoPath || "", createdAt: serializeDate(data.createdAt), assignedPatientIds: Array.isArray(data.assignedPatientIds) ? data.assignedPatientIds : [], passkeyLast4: data.passkeyLast4 || "", passkeyCreatedAt: serializeDate(data.passkeyCreatedAt), passkeyLastUsedAt: serializeDate(data.passkeyLastUsedAt) };
     }).filter((person) => STAFF_ROLES.includes(person.role as StaffRole));
     return NextResponse.json({ success: true, staff });
   } catch (error) {
@@ -166,7 +166,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const uid = String(body.uid || "").trim();
     const active = Boolean(body.active);
-    const photoURL = typeof body.photoURL === "string" ? body.photoURL.trim() : "";
+    const photoPath = typeof body.photoPath === "string" ? body.photoPath.trim() : "";
     if (!uid) return validationError("Staff UID is required.");
 
     const staffRef = adminDb.collection("users").doc(uid);
@@ -174,8 +174,9 @@ export async function PATCH(request: NextRequest) {
     if (!staffDoc.exists) return errorResponse({ category: "firestore", status: 404, code: "staff_not_found", message: "Staff account not found." });
 
     const staffData = staffDoc.data() || {};
-    if (photoURL) {
-      await staffRef.update({ photoURL });
+    if (photoPath) {
+      if (!photoPath.startsWith("profile-photos/staff/" + uid + "/")) return validationError("Invalid staff profile photo path.");
+      await staffRef.update({ photoPath });
       await recordServerAudit({ action: "update", module: "staff", recordId: uid, description: `Updated profile photo for staff account ${uid}.`, userId: manager.uid, role: manager.role });
       return NextResponse.json({ success: true, message: "Staff profile photo updated." });
     }
