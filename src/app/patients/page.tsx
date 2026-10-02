@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
-  getDoc,
   onSnapshot,
   query,
   updateDoc,
@@ -173,26 +172,26 @@ export default function PatientsPage() {
         throw new Error("Missing Firestore patient document ID.");
       }
 
-      const patientRef = doc(db, PATIENTS_COLLECTION, firestoreId);
-      const existing = await getDoc(patientRef);
-      if (!existing.exists()) {
-        throw new Error(`Patient document ${firestoreId} was not found.`);
+      const token = await user?.getIdToken();
+      if (!token) throw new Error("Your login session has expired. Please sign in again.");
+
+      const response = await fetch("/api/patients/discharge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firestoreId,
+          patientId: patient.id,
+          patientName: patient.name,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || `Discharge failed (HTTP ${response.status}).`);
       }
-
-      const dischargeDate = new Date().toISOString().slice(0, 10);
-      await updateDoc(patientRef, {
-        status: "Discharged",
-        dischargeDate,
-        updatedAt: new Date().toISOString(),
-      });
-
-      void recordAudit({
-        action: "update",
-        module: "patients",
-        recordId: firestoreId,
-        description: `Discharged patient ${patient.name} (${patient.id}).`,
-        metadata: { patientId: patient.id, dischargeDate },
-      });
 
       setSelected(null);
     } catch (dischargeError) {
