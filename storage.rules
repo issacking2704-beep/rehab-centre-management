@@ -40,7 +40,7 @@ service firebase.storage {
 
     match /profile-photos/staff/{staffUid}/{fileName} {
       allow read: if role() in ['super_admin', 'admin', 'sub_admin'];
-      allow write: if isAdmin()
+      allow write: if role() in ['super_admin', 'admin', 'sub_admin']
         && request.resource.size < 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
       allow delete: if isAdmin();
