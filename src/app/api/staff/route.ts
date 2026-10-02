@@ -168,15 +168,18 @@ export async function PATCH(request: NextRequest) {
     const active = Boolean(body.active);
     const photoURL = typeof body.photoURL === "string" ? body.photoURL.trim() : "";
     if (!uid) return validationError("Staff UID is required.");
+
+    const staffRef = adminDb.collection("users").doc(uid);
+    const staffDoc = await staffRef.get();
+    if (!staffDoc.exists) return errorResponse({ category: "firestore", status: 404, code: "staff_not_found", message: "Staff account not found." });
+
+    const staffData = staffDoc.data() || {};
     if (photoURL) {
       await staffRef.update({ photoURL });
       await recordServerAudit({ action: "update", module: "staff", recordId: uid, description: `Updated profile photo for staff account ${uid}.`, userId: manager.uid, role: manager.role });
       return NextResponse.json({ success: true, message: "Staff profile photo updated." });
     }
-    const staffRef = adminDb.collection("users").doc(uid);
-    const staffDoc = await staffRef.get();
-    if (!staffDoc.exists) return errorResponse({ category: "firestore", status: 404, code: "staff_not_found", message: "Staff account not found." });
-    const staffData = staffDoc.data() || {};
+
     if (staffData.role === "super_admin") return errorResponse({ category: "permissions", status: 403, code: "super_admin_protected", message: "The Super Admin account cannot be disabled." });
     await adminAuth.updateUser(uid, { disabled: !active });
     await staffRef.update({ active });
