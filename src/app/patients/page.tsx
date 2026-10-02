@@ -11,7 +11,8 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, User } from "firebase/auth";
 
-import { auth, db } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { hasPermission, UserRole } from "@/lib/permissions";
 import { makePatientId, Patient, PATIENTS_COLLECTION } from "@/lib/patient";
 
@@ -28,6 +29,7 @@ const emptyForm: Omit<Patient, "id" | "createdAt"> = {
   therapist: "",
   room: "",
   notes: "",
+  photoURL: "",
   isDeleted: false,
 };
 
@@ -44,6 +46,7 @@ export default function PatientsPage() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
   const [view, setView] = useState<"active" | "discharged" | "all">("active");
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (firebaseUser) => {
@@ -107,6 +110,7 @@ export default function PatientsPage() {
   function openNew() {
     setEditing(null);
     setForm(emptyForm);
+    setPhotoFile(null);
     setError("");
     setShowForm(true);
   }
@@ -114,6 +118,7 @@ export default function PatientsPage() {
   function openEdit(patient: Patient) {
     setEditing(patient);
     setForm({ ...emptyForm, ...patient });
+    setPhotoFile(null);
     setError("");
     setShowForm(true);
   }
@@ -130,24 +135,31 @@ export default function PatientsPage() {
     try {
       const now = new Date().toISOString();
       if (editing) {
-        await updateDoc(doc(db, PATIENTS_COLLECTION, editing.firestoreId || editing.id), {
-          ...form,
-          name: form.name.trim(),
-          updatedAt: now,
-          isDeleted: false,
+        const firestoreId = editing.firestoreId || editing.id;
+        let photoURL = form.photoURL || "";
+        if (photoFile) {
+          validateProfilePhoto(photoFile);
+          const photoRef = ref(storage, "profile-photos/patients/" + firestoreId + "/profile");
+          const uploaded = await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
+          photoURL = await getDownloadURL(uploaded.ref);
+        }
+        await updateDoc(doc(db, PATIENTS_COLLECTION, firestoreId), {
+          ...form, photoURL, name: form.name.trim(), updatedAt: now, isDeleted: false,
           status: form.dischargeDate ? "Discharged" : (editing.status || "Active"),
         });
       } else {
         const id = makePatientId(patients.map((patient) => patient.id));
-        await addDoc(collection(db, PATIENTS_COLLECTION), {
-          ...form,
-          id,
-          name: form.name.trim(),
-          createdAt: now,
-          updatedAt: now,
-          isDeleted: false,
-          status: form.dischargeDate ? "Discharged" : "Active",
+        const patientRef = await addDoc(collection(db, PATIENTS_COLLECTION), {
+          ...form, id, name: form.name.trim(), photoURL: "", createdAt: now, updatedAt: now,
+          isDeleted: false, status: form.dischargeDate ? "Discharged" : "Active",
         });
+        if (photoFile) {
+          validateProfilePhoto(photoFile);
+          const photoRef = ref(storage, "profile-photos/patients/" + patientRef.id + "/profile");
+          const uploaded = await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
+          const photoURL = await getDownloadURL(uploaded.ref);
+          await updateDoc(patientRef, { photoURL, updatedAt: now });
+        }
       }
       setShowForm(false);
       setEditing(null);
@@ -318,6 +330,7 @@ export default function PatientsPage() {
 
       {showForm && (
         <Modal title={editing ? "Edit Patient" : "Add Patient"} onClose={() => setShowForm(false)}>
+          <div className="mb-5"><PhotoPicker value={form.photoURL} file={photoFile} onFileChange={setPhotoFile} label="Patient profile photo" /></div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Full name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
             <Field label="Age" value={form.age} onChange={(value) => setForm({ ...form, age: value })} type="number" />
@@ -338,6 +351,7 @@ export default function PatientsPage() {
 
       {selected && (
         <Modal title={selected.name} onClose={() => setSelected(null)}>
+          <div className="mb-5 flex items-center gap-4"><Avatar src={selected.photoURL} name={selected.name} size="lg" /><div><p className="font-bold">{selected.name}</p><p className="text-sm text-slate-500">Patient profile photo</p></div></div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Info label="Patient ID" value={selected.id} /><Info label="Age / Gender" value={`${selected.age || "—"} / ${selected.gender || "—"}`} />
             <Info label="Phone" value={selected.phone || "—"} /><Info label="Emergency" value={selected.emergencyContact || "—"} />
@@ -369,4 +383,24 @@ function formatDate(value?: string) {
   if (!value) return "—";
   const date = new Date(`${value}T00:00:00`);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function validateProfilePhoto(file: File) {
+  if (!file.type.startsWith("image/")) throw new Error("Profile photo must be an image file.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Profile photo must be 5 MB or smaller.");
+}
+function Avatar({ src, name, size = "md" }: { src?: string; name: string; size?: "md" | "lg" }) {
+  const sizeClass = size === "lg" ? "h-20 w-20 text-2xl" : "h-11 w-11 text-sm";
+  return src ? <img src={src} alt={name + " profile"} className={sizeClass + " rounded-full object-cover ring-2 ring-slate-100"} /> : <div className={sizeClass + " flex items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 ring-2 ring-slate-100"}>{name.trim().charAt(0).toUpperCase() || "P"}</div>;
+}
+function PhotoPicker({ value, file, onFileChange, label }: { value?: string; file: File | null; onFileChange: (file: File | null) => void; label: string }) {
+  const [preview, setPreview] = useState(value || "");
+  useEffect(() => { if (!file) { setPreview(value || ""); return; } const url = URL.createObjectURL(file); setPreview(url); return () => URL.revokeObjectURL(url); }, [file, value]);
+  return <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    {preview ? <img src={preview} alt="Profile preview" className="h-20 w-20 rounded-full object-cover ring-2 ring-white shadow" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-2xl text-slate-500">👤</div>}
+    <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-slate-500">JPG, PNG, WEBP • maximum 5 MB</p>
+      <label className="mt-3 inline-flex cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">{file || value ? "Change Photo" : "Add Photo"}<input type="file" accept="image/*" className="hidden" onChange={(event) => onFileChange(event.target.files?.[0] || null)} /></label>
+      {(file || value) && <button type="button" onClick={() => onFileChange(null)} className="ml-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-slate-700">Keep Existing</button>}
+    </div>
+  </div>;
 }
