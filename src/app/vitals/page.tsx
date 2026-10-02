@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { addDoc, collection, deleteDoc, doc, getDocs, updateDoc } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
+import { recordAudit } from "@/lib/audit";
 
 type Patient = { id: string; name?: string; isDeleted?: boolean };
 type Vital = {
@@ -126,10 +127,12 @@ export default function VitalsPage() {
       };
       if (editingId) {
         await updateDoc(doc(db, "vitals", editingId), payload);
+        void recordAudit({ action: "update", module: "vitals", recordId: editingId, description: `Updated vitals for ${payload.patientName} on ${payload.date}.`, metadata: { patientId: payload.patientId } });
         setRecords((items) => items.map((item) => item.id === editingId ? { ...item, ...payload } : item));
       } else {
         const createdAt = new Date().toISOString();
         const created = await addDoc(collection(db, "vitals"), { ...payload, createdAt });
+        void recordAudit({ action: "create", module: "vitals", recordId: created.id, description: `Recorded vitals for ${payload.patientName} on ${payload.date}.`, metadata: { patientId: payload.patientId } });
         setRecords((items) => [{ ...payload, createdAt, id: created.id } as Vital, ...items]);
       }
       setShowForm(false);
@@ -146,6 +149,7 @@ export default function VitalsPage() {
     if (!window.confirm(`Delete vitals for ${record.patientName} on ${formatDate(record.date)}?`)) return;
     try {
       await deleteDoc(doc(db, "vitals", record.id));
+      void recordAudit({ action: "delete", module: "vitals", recordId: record.id, description: `Deleted vitals for ${record.patientName} on ${record.date}.`, metadata: { patientId: record.patientId } });
       setRecords((items) => items.filter((item) => item.id !== record.id));
       setSelected(null);
     } catch (e) {
