@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase-admin";
+import { recordServerAudit } from "@/lib/audit-server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     await getAdminDb().collection("settings").doc("branding").set(settings, { merge: true });
+    await recordServerAudit({ action: "update", module: "settings", recordId: "branding", description: "Updated centre branding and appearance settings.", userId: decoded.uid, userName: typeof profile?.name === "string" ? profile.name : undefined, role });
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Branding settings API error", error);
