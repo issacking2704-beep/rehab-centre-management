@@ -96,6 +96,8 @@ export default function DeletedPatientsPage() {
         const ids = u.data().assignedPatientIds;
         return Array.isArray(ids) && ids.includes(patient.id);
       }).map((u) => updateDoc(u.ref, { assignedPatientIds: arrayRemove(patient.id) })));
+      const profilePhotoPath = patient.photoPath || ("profile-photos/patients/" + (patient.firestoreId || patient.id) + "/profile");
+      try { await deleteObject(ref(storage, profilePhotoPath)); } catch {}
       await deleteDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id));
       void recordAudit({ action: "permanent_delete", module: "patients", recordId: patient.firestoreId || patient.id, description: `Permanently deleted patient ${patient.name} and linked records.`, metadata: { patientId: patient.id } });
       setSelected(null);
@@ -111,8 +113,30 @@ export default function DeletedPatientsPage() {
     try {
       const snapshot = await getDocs(collection(db, PATIENTS_COLLECTION));
       const deletedDocs = snapshot.docs.filter((item) => item.data().isDeleted === true);
-      await Promise.all(deletedDocs.map((item) => deleteDoc(item.ref)));
-      void recordAudit({ action: "permanent_delete_bulk", module: "patients", description: `Permanently deleted ${deletedDocs.length} patient records from Deleted Patients.`, metadata: { count: deletedDocs.length } });
+      const linkedCollections = ["vitals", "payments", "invoices", "bills", "patientFiles", "reports", "documents"];
+      const usersSnapshot = await getDocs(collection(db, "users"));
+      for (const patientDoc of deletedDocs) {
+        const patientData = patientDoc.data() as Patient;
+        const patientId = patientData.id || patientDoc.id;
+        for (const collectionName of linkedCollections) {
+          const linked = await getDocs(query(collection(db, collectionName), where("patientId", "==", patientId)));
+          for (const linkedDoc of linked.docs) {
+            const linkedData = linkedDoc.data() as { storagePath?: string };
+            if (collectionName === "patientFiles" && linkedData.storagePath) {
+              try { await deleteObject(ref(storage, linkedData.storagePath)); } catch {}
+            }
+            await deleteDoc(linkedDoc.ref);
+          }
+        }
+        await Promise.all(usersSnapshot.docs.filter((u) => {
+          const ids = u.data().assignedPatientIds;
+          return Array.isArray(ids) && ids.includes(patientId);
+        }).map((u) => updateDoc(u.ref, { assignedPatientIds: arrayRemove(patientId) })));
+        const photoPath = patientData.photoPath || ("profile-photos/patients/" + patientDoc.id + "/profile");
+        try { await deleteObject(ref(storage, photoPath)); } catch {}
+        await deleteDoc(patientDoc.ref);
+      }
+      void recordAudit({ action: "permanent_delete_bulk", module: "patients", description: `Permanently deleted ${deletedDocs.length} patient records and linked data from Deleted Patients.`, metadata: { count: deletedDocs.length } });
       setSelected(null);
     } catch (deleteError) {
       console.error(deleteError);
