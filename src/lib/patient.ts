@@ -15,7 +15,7 @@ export type Patient = {
   therapist: string;
   room: string;
   notes: string;
-  photoURL?: string;
+  photoURL?: string;\n  photoPath?: string;
   createdAt: string;
   updatedAt?: string;
   deletedAt?: string;
