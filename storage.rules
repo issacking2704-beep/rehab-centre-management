@@ -12,13 +12,33 @@ service firebase.storage {
         : null;
     }
 
-    function isAdmin() {\n      return role() in ['super_admin', 'admin'];\n    }\n\n    function canUpload() {
+    function isAdmin() {
+      return role() in ['super_admin', 'admin'];
+    }
+
+    function canUpload() {
       return role() in ['super_admin', 'admin', 'doctor', 'staff', 'accounts', 'reception'];
     }
 
     match /branding/{fileName} {
       allow read: if signedIn();
       allow write: if isAdmin() && request.resource.size < 2 * 1024 * 1024;
+      allow delete: if isAdmin();
+    }
+
+    match /profile-photos/patients/{patientId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if canUpload()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isAdmin();
+    }
+
+    match /profile-photos/staff/{staffUid}/{fileName} {
+      allow read: if signedIn();
+      allow write: if isAdmin()
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
       allow delete: if isAdmin();
     }
 
