@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
+  getDoc,
   onSnapshot,
   query,
   updateDoc,
@@ -14,6 +15,7 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { hasPermission, UserRole } from "@/lib/permissions";
 import { makePatientId, Patient, PATIENTS_COLLECTION } from "@/lib/patient";
+import { recordAudit } from "@/lib/audit";
 
 const emptyForm: Omit<Patient, "id" | "createdAt"> = {
   name: "",
@@ -163,11 +165,41 @@ export default function PatientsPage() {
   async function discharge(patient: Patient) {
     if (!canEdit || patient.status === "Discharged") return;
     if (!window.confirm(`Discharge ${patient.name}?`)) return;
+
+    setError("");
     try {
-      const date = new Date().toISOString().slice(0, 10);
-      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id), { status: "Discharged", dischargeDate: date, updatedAt: new Date().toISOString() });
+      const firestoreId = patient.firestoreId;
+      if (!firestoreId) {
+        throw new Error("Missing Firestore patient document ID.");
+      }
+
+      const patientRef = doc(db, PATIENTS_COLLECTION, firestoreId);
+      const existing = await getDoc(patientRef);
+      if (!existing.exists()) {
+        throw new Error(`Patient document ${firestoreId} was not found.`);
+      }
+
+      const dischargeDate = new Date().toISOString().slice(0, 10);
+      await updateDoc(patientRef, {
+        status: "Discharged",
+        dischargeDate,
+        updatedAt: new Date().toISOString(),
+      });
+
+      void recordAudit({
+        action: "update",
+        module: "patients",
+        recordId: firestoreId,
+        description: `Discharged patient ${patient.name} (${patient.id}).`,
+        metadata: { patientId: patient.id, dischargeDate },
+      });
+
       setSelected(null);
-    } catch (e) { console.error(e); setError("Unable to discharge the patient."); }
+    } catch (dischargeError) {
+      console.error("Patient discharge failed:", dischargeError);
+      const message = dischargeError instanceof Error ? dischargeError.message : "Unknown Firebase error";
+      setError(`Unable to discharge the patient. ${message}`);
+    }
   }
 
   async function softDelete(patient: Patient) {
