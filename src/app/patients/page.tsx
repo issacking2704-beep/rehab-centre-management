@@ -15,6 +15,7 @@ import { auth, db, storage } from "@/lib/firebase";
 import { getBlob, ref, uploadBytes } from "firebase/storage";
 import { hasPermission, UserRole } from "@/lib/permissions";
 import { makePatientId, Patient, PATIENTS_COLLECTION } from "@/lib/patient";
+import { recordAudit } from "@/lib/audit";
 
 const emptyForm: Omit<Patient, "id" | "createdAt"> = {
   name: "",
@@ -147,6 +148,7 @@ export default function PatientsPage() {
           ...form, photoPath, name: form.name.trim(), updatedAt: now, isDeleted: false,
           status: form.dischargeDate ? "Discharged" : (editing.status || "Active"),
         });
+        void recordAudit({ action: "update", module: "patients", recordId: firestoreId, description: `Updated patient profile for ${form.name.trim()}.`, metadata: { patientId: editing.id, profilePhotoUpdated: Boolean(photoFile) } });
       } else {
         const id = makePatientId(patients.map((patient) => patient.id));
         const patientRef = await addDoc(collection(db, PATIENTS_COLLECTION), {
@@ -160,6 +162,7 @@ export default function PatientsPage() {
           const photoPath = "profile-photos/patients/" + patientRef.id + "/profile";
           await updateDoc(patientRef, { photoPath, updatedAt: now });
         }
+        void recordAudit({ action: "create", module: "patients", recordId: patientRef.id, description: `Created patient profile for ${form.name.trim()}.`, metadata: { patientId: id, profilePhotoAdded: Boolean(photoFile) } });
       }
       setShowForm(false);
       setEditing(null);
@@ -222,6 +225,7 @@ export default function PatientsPage() {
         deletedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
+      void recordAudit({ action: "delete", module: "patients", recordId: patient.firestoreId || patient.id, description: `Moved patient ${patient.name} to Deleted Patients.`, metadata: { patientId: patient.id } });
       setSelected(null);
     } catch (deleteError) {
       console.error(deleteError);
