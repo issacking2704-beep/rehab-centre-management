@@ -393,18 +393,58 @@ function validateProfilePhoto(file: File) {
   if (!file.type.startsWith("image/")) throw new Error("Profile photo must be an image file.");
   if (file.size > 5 * 1024 * 1024) throw new Error("Profile photo must be 5 MB or smaller.");
 }
-function Avatar({ src, name, size = "md" }: { src?: string; name: string; size?: "md" | "lg" }) {
-  const sizeClass = size === "lg" ? "h-20 w-20 text-2xl" : "h-11 w-11 text-sm";
-  return src ? <img src={src} alt={name + " profile"} className={sizeClass + " rounded-full object-cover ring-2 ring-slate-100"} /> : <div className={sizeClass + " flex items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 ring-2 ring-slate-100"}>{name.trim().charAt(0).toUpperCase() || "P"}</div>;
+function usePrivatePhoto(path?: string) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    if (!path) { setSrc(""); return; }
+    getBlob(ref(storage, path))
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch((error) => {
+        console.error("Private profile photo could not be loaded:", error);
+        if (active) setSrc("");
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [path]);
+  return src;
 }
+
+function Avatar({ src, name, size = "md" }: { src?: string; name: string; size?: "md" | "lg" }) {
+  const privateSrc = usePrivatePhoto(src);
+  const sizeClass = size === "lg" ? "h-20 w-20 text-2xl" : "h-11 w-11 text-sm";
+  return privateSrc
+    ? <img src={privateSrc} alt={name + " profile"} className={sizeClass + " rounded-full object-cover ring-2 ring-slate-100"} />
+    : <div className={sizeClass + " flex items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 ring-2 ring-slate-100"}>{name.trim().charAt(0).toUpperCase() || "P"}</div>;
+}
+
 function PhotoPicker({ value, file, onFileChange, label }: { value?: string; file: File | null; onFileChange: (file: File | null) => void; label: string }) {
-  const [preview, setPreview] = useState(value || "");
-  useEffect(() => { if (!file) { setPreview(value || ""); return; } const url = URL.createObjectURL(file); setPreview(url); return () => URL.revokeObjectURL(url); }, [file, value]);
+  const privateSrc = usePrivatePhoto(value);
+  const [preview, setPreview] = useState("");
+  useEffect(() => {
+    if (!file) { setPreview(""); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
   return <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
     {(preview || privateSrc) ? <img src={preview || privateSrc} alt="Profile preview" className="h-20 w-20 rounded-full object-cover ring-2 ring-white shadow" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-2xl text-slate-500">👤</div>}
-    <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-slate-500">JPG, PNG, WEBP • maximum 5 MB</p>
-      <label className="mt-3 inline-flex cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">{file || value ? "Change Photo" : "Add Photo"}<input type="file" accept="image/*" className="hidden" onChange={(event) => onFileChange(event.target.files?.[0] || null)} /></label>
-      {(file || value) && <button type="button" onClick={() => onFileChange(null)} className="ml-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-slate-700">Keep Existing</button>}
+    <div className="min-w-0 flex-1">
+      <p className="text-sm font-semibold">{label}</p>
+      <p className="mt-1 text-xs text-slate-500">JPG, PNG, WEBP • maximum 5 MB</p>
+      <label className="mt-3 inline-flex cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+        {file || value ? "Change Photo" : "Add Photo"}
+        <input type="file" accept="image/*" className="hidden" onChange={(event) => onFileChange(event.target.files?.[0] || null)} />
+      </label>
+      {(file || value) && <button type="button" onClick={() => onFileChange(null)} className="ml-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-slate-700">{value ? "Keep Existing" : "Remove Selection"}</button>}
     </div>
   </div>;
 }
