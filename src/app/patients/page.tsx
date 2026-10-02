@@ -12,7 +12,7 @@ import {
 import { onAuthStateChanged, User } from "firebase/auth";
 
 import { auth, db, storage } from "@/lib/firebase";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getBlob, ref, uploadBytes } from "firebase/storage";
 import { hasPermission, UserRole } from "@/lib/permissions";
 import { makePatientId, Patient, PATIENTS_COLLECTION } from "@/lib/patient";
 
@@ -29,7 +29,7 @@ const emptyForm: Omit<Patient, "id" | "createdAt"> = {
   therapist: "",
   room: "",
   notes: "",
-  photoURL: "",
+  photoPath: "",
   isDeleted: false,
 };
 
@@ -105,7 +105,7 @@ export default function PatientsPage() {
         .toLowerCase()
         .includes(q)
     );
-  }, [patients, search]);
+  }, [patients, search, view]);
 
   function openNew() {
     setEditing(null);
@@ -136,29 +136,29 @@ export default function PatientsPage() {
       const now = new Date().toISOString();
       if (editing) {
         const firestoreId = editing.firestoreId || editing.id;
-        let photoURL = form.photoURL || "";
+        let photoPath = form.photoPath || "";
         if (photoFile) {
           validateProfilePhoto(photoFile);
           const photoRef = ref(storage, "profile-photos/patients/" + firestoreId + "/profile");
           const uploaded = await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
-          photoURL = await getDownloadURL(uploaded.ref);
+          photoPath = "profile-photos/patients/" + firestoreId + "/profile";
         }
         await updateDoc(doc(db, PATIENTS_COLLECTION, firestoreId), {
-          ...form, photoURL, name: form.name.trim(), updatedAt: now, isDeleted: false,
+          ...form, photoPath, name: form.name.trim(), updatedAt: now, isDeleted: false,
           status: form.dischargeDate ? "Discharged" : (editing.status || "Active"),
         });
       } else {
         const id = makePatientId(patients.map((patient) => patient.id));
         const patientRef = await addDoc(collection(db, PATIENTS_COLLECTION), {
-          ...form, id, name: form.name.trim(), photoURL: "", createdAt: now, updatedAt: now,
+          ...form, id, name: form.name.trim(), photoPath: "", createdAt: now, updatedAt: now,
           isDeleted: false, status: form.dischargeDate ? "Discharged" : "Active",
         });
         if (photoFile) {
           validateProfilePhoto(photoFile);
           const photoRef = ref(storage, "profile-photos/patients/" + patientRef.id + "/profile");
           const uploaded = await uploadBytes(photoRef, photoFile, { contentType: photoFile.type });
-          const photoURL = await getDownloadURL(uploaded.ref);
-          await updateDoc(patientRef, { photoURL, updatedAt: now });
+          const photoPath = "profile-photos/patients/" + patientRef.id + "/profile";
+          await updateDoc(patientRef, { photoPath, updatedAt: now });
         }
       }
       setShowForm(false);
@@ -330,7 +330,7 @@ export default function PatientsPage() {
 
       {showForm && (
         <Modal title={editing ? "Edit Patient" : "Add Patient"} onClose={() => setShowForm(false)}>
-          <div className="mb-5"><PhotoPicker value={form.photoURL} file={photoFile} onFileChange={setPhotoFile} label="Patient profile photo" /></div>
+          <div className="mb-5"><PhotoPicker value={form.photoPath} file={photoFile} onFileChange={setPhotoFile} label="Patient profile photo" /></div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Full name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
             <Field label="Age" value={form.age} onChange={(value) => setForm({ ...form, age: value })} type="number" />
@@ -351,7 +351,7 @@ export default function PatientsPage() {
 
       {selected && (
         <Modal title={selected.name} onClose={() => setSelected(null)}>
-          <div className="mb-5 flex items-center gap-4"><Avatar src={selected.photoURL} name={selected.name} size="lg" /><div><p className="font-bold">{selected.name}</p><p className="text-sm text-slate-500">Patient profile photo</p></div></div>
+          <div className="mb-5 flex items-center gap-4"><Avatar src={selected.photoPath} name={selected.name} size="lg" /><div><p className="font-bold">{selected.name}</p><p className="text-sm text-slate-500">Patient profile photo</p></div></div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Info label="Patient ID" value={selected.id} /><Info label="Age / Gender" value={`${selected.age || "—"} / ${selected.gender || "—"}`} />
             <Info label="Phone" value={selected.phone || "—"} /><Info label="Emergency" value={selected.emergencyContact || "—"} />
@@ -397,7 +397,7 @@ function PhotoPicker({ value, file, onFileChange, label }: { value?: string; fil
   const [preview, setPreview] = useState(value || "");
   useEffect(() => { if (!file) { setPreview(value || ""); return; } const url = URL.createObjectURL(file); setPreview(url); return () => URL.revokeObjectURL(url); }, [file, value]);
   return <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-    {preview ? <img src={preview} alt="Profile preview" className="h-20 w-20 rounded-full object-cover ring-2 ring-white shadow" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-2xl text-slate-500">👤</div>}
+    {(preview || privateSrc) ? <img src={preview || privateSrc} alt="Profile preview" className="h-20 w-20 rounded-full object-cover ring-2 ring-white shadow" /> : <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-200 text-2xl text-slate-500">👤</div>}
     <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{label}</p><p className="mt-1 text-xs text-slate-500">JPG, PNG, WEBP • maximum 5 MB</p>
       <label className="mt-3 inline-flex cursor-pointer rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">{file || value ? "Change Photo" : "Add Photo"}<input type="file" accept="image/*" className="hidden" onChange={(event) => onFileChange(event.target.files?.[0] || null)} /></label>
       {(file || value) && <button type="button" onClick={() => onFileChange(null)} className="ml-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-slate-700">Keep Existing</button>}
