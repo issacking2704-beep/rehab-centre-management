@@ -14,7 +14,6 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { hasPermission, UserRole } from "@/lib/permissions";
 import { makePatientId, Patient, PATIENTS_COLLECTION } from "@/lib/patient";
-import { recordAudit } from "@/lib/audit";
 
 const emptyForm: Omit<Patient, "id" | "createdAt"> = {
   name: "",
