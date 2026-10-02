@@ -47,7 +47,7 @@ service firebase.storage {
     }
 
     match /patient-files/{patientId}/{fileName} {
-      allow read: if signedIn();
+      allow read: if canReadPatientPhotos();
       allow write: if canUpload()
         && request.resource.size < 10 * 1024 * 1024;
       allow delete: if role() in ['super_admin', 'admin'];
