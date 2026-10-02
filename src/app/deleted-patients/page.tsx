@@ -8,6 +8,7 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { auth, db, storage } from "@/lib/firebase";
 import { isSuperAdmin, UserRole } from "@/lib/permissions";
 import { Patient, PATIENTS_COLLECTION } from "@/lib/patient";
+import { recordAudit } from "@/lib/audit";
 
 export default function DeletedPatientsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -67,6 +68,7 @@ export default function DeletedPatientsPage() {
     if (!window.confirm(`Restore ${patient.name} to active patients?`)) return;
     try {
       await updateDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id), { isDeleted: false, deletedAt: null, updatedAt: new Date().toISOString() });
+      void recordAudit({ action: "restore", module: "patients", recordId: patient.firestoreId || patient.id, description: `Restored patient ${patient.name} from Deleted Patients.`, metadata: { patientId: patient.id } });
       setSelected(null);
     } catch (restoreError) {
       console.error(restoreError);
@@ -95,6 +97,7 @@ export default function DeletedPatientsPage() {
         return Array.isArray(ids) && ids.includes(patient.id);
       }).map((u) => updateDoc(u.ref, { assignedPatientIds: arrayRemove(patient.id) })));
       await deleteDoc(doc(db, PATIENTS_COLLECTION, patient.firestoreId || patient.id));
+      void recordAudit({ action: "permanent_delete", module: "patients", recordId: patient.firestoreId || patient.id, description: `Permanently deleted patient ${patient.name} and linked records.`, metadata: { patientId: patient.id } });
       setSelected(null);
     } catch (deleteError) {
       console.error(deleteError);
@@ -107,7 +110,9 @@ export default function DeletedPatientsPage() {
     if (!window.confirm(`Permanently delete all ${patients.length} deleted patient records? This cannot be undone.`)) return;
     try {
       const snapshot = await getDocs(collection(db, PATIENTS_COLLECTION));
-      await Promise.all(snapshot.docs.filter((item) => item.data().isDeleted === true).map((item) => deleteDoc(item.ref)));
+      const deletedDocs = snapshot.docs.filter((item) => item.data().isDeleted === true);
+      await Promise.all(deletedDocs.map((item) => deleteDoc(item.ref)));
+      void recordAudit({ action: "permanent_delete_bulk", module: "patients", description: `Permanently deleted ${deletedDocs.length} patient records from Deleted Patients.`, metadata: { count: deletedDocs.length } });
       setSelected(null);
     } catch (deleteError) {
       console.error(deleteError);
