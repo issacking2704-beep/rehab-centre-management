@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { collection, deleteDoc, doc, getDocs, addDoc, updateDoc } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { deleteObject, getBlob, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
+import { recordAudit } from "@/lib/audit";
 
 type Patient = {
   id: string;
@@ -34,6 +35,7 @@ type PatientFile = {
   uploadedAt: string;
   description: string;
   category: string;
+  storagePath?: string;
 };
 
 const PATIENTS_KEY = "rehab-centre-patients";
@@ -273,8 +275,7 @@ export default function PatientFilesPage() {
         const storagePath = `patient-files/${selectedPatient.id}/${fileId}-${file.name}`;
         const storageRef = ref(storage, storagePath);
         await uploadBytes(storageRef, file, { contentType: file.type || "application/octet-stream" });
-        const downloadUrl = await getDownloadURL(storageRef);
-        await addDoc(collection(db, "patientFiles"), {
+        const metadata = await addDoc(collection(db, "patientFiles"), {
           patientId: selectedPatient.id,
           patientName: selectedPatient.name,
           folder: uploadFolder,
@@ -285,8 +286,8 @@ export default function PatientFilesPage() {
           description: uploadDescription.trim(),
           category: uploadCategory,
           storagePath,
-          downloadUrl,
         });
+        void recordAudit({ action: "upload", module: "patientFiles", recordId: metadata.id, description: "Uploaded " + file.name + " for " + selectedPatient.name + ".", metadata: { patientId: selectedPatient.id, category: uploadCategory } });
       }
       const refreshed = await getDocs(collection(db, "patientFiles"));
       setFiles(refreshed.docs.map((d) => ({ id: d.id, ...d.data() } as PatientFile)));
@@ -299,13 +300,6 @@ export default function PatientFilesPage() {
     setShowUploadForm(false);
     setUploadDescription("");
 
-    /*
-     * The browser File object is intentionally not stored here.
-     * This page currently stores the document metadata only.
-     *
-     * Actual document storage should be connected to a secure
-     * file-storage service before this is used for real patient records.
-     */
     alert(
       `${newFiles.length} document ${
         newFiles.length === 1 ? "record" : "records"
@@ -313,6 +307,28 @@ export default function PatientFilesPage() {
     );
 
     event.target.value = "";
+  }
+
+  async function downloadFile(file: PatientFile) {
+    if (!file.storagePath) {
+      alert("This older file record has no secure storage path. Please re-upload the file.");
+      return;
+    }
+    try {
+      const blob = await getBlob(ref(storage, file.storagePath));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = file.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      void recordAudit({ action: "download", module: "patientFiles", recordId: file.id, description: "Downloaded patient file " + file.fileName + ".", metadata: { patientId: file.patientId } });
+    } catch (error) {
+      console.error("Unable to download patient file", error);
+      alert("Unable to download this file. Check your account permissions.");
+    }
   }
 
   function openRename(file: PatientFile) {
@@ -332,6 +348,7 @@ export default function PatientFilesPage() {
 
     void updateDoc(doc(db, "patientFiles", editingFile.id), { fileName: name }).then(() => {
       setFiles((current) => current.map((file) => file.id === editingFile.id ? { ...file, fileName: name } : file));
+      void recordAudit({ action: "rename", module: "patientFiles", recordId: editingFile.id, description: "Renamed patient file to " + name + ".", metadata: { patientId: editingFile.patientId } });
     }).catch((error) => console.error("Unable to rename document", error));
 
     setEditingFile(null);
@@ -349,10 +366,10 @@ export default function PatientFilesPage() {
 
     void (async () => {
       try {
+        const storagePath = file.storagePath;
+        if (storagePath) await deleteObject(ref(storage, storagePath));
         await deleteDoc(doc(db, "patientFiles", file.id));
-        if ((file as PatientFile & { storagePath?: string }).storagePath) {
-          await deleteObject(ref(storage, (file as PatientFile & { storagePath?: string }).storagePath!));
-        }
+        void recordAudit({ action: "delete", module: "patientFiles", recordId: file.id, description: "Deleted patient file " + file.fileName + ".", metadata: { patientId: file.patientId } });
         setFiles((current) => current.filter((item) => item.id !== file.id));
       } catch (error) {
         console.error("Unable to delete document", error);
@@ -632,6 +649,14 @@ export default function PatientFilesPage() {
                           </div>
 
                           <div className="flex shrink-0 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void downloadFile(file)}
+                              className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                            >
+                              Download
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => openRename(file)}
